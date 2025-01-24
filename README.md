@@ -1,5 +1,6 @@
 
-Nota para Mar: Los flujos de datos no soy muy elegantes, pero funcionan jsjs :D
+> [!NOTE] 
+**Nota para Mar**: Los flujos de datos no soy muy elegantes, pero funcionan jsjs :D
 
 
 ## Instalación
@@ -34,15 +35,15 @@ Nota para Mar: Los flujos de datos no soy muy elegantes, pero funcionan jsjs :D
 
 6. ¡Haz que la mágia suceda!, ejecuta en la terminal (desde el root): 
 
-    > [!NOTE]
-    **Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC. 
+> [!NOTE]
+**Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC. 
 
     ```sh
     python main.py
     ```
 
-      > [!WARNING]
-    **Atención:** Debido al nivel de calculos realizados, procesar todos los datos demorará bastante tiempo. Asegúrate de estar preparado para ejecutar este comando. 
+> [!WARNING]
+**Atención:** Debido al nivel de calculos realizados, procesar todos los datos demorará bastante tiempo. Asegúrate de estar preparado para ejecutar este comando. 
 
 ## Métricas y gráficas
 

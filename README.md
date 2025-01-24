@@ -12,11 +12,12 @@
     ```
 
 2. Crea un entorno virtual
+
     ```sh
     python -m venv venv
     ```
 
-3. Activa el entorno virtual
+4. Activa el entorno virtual
     - En Windows:
         ```sh
         .\venv\Scripts\activate
@@ -26,20 +27,21 @@
         source venv/bin/activate
         ```
 
-4. Instala las dependencias del 
+5. Instala las dependencias del 
     ```sh
     pip install -r requirements.txt
     ```
 
-5. LLena la carpeta `data/row` con todos los archivos `.csv` a procesar
+6. LLena la carpeta `data/row` con todos los archivos `.csv` a procesar
 
-6. ¡Haz que la mágia suceda!, ejecuta en la terminal (desde el root): 
+7. ¡Haz que la mágia suceda!, ejecuta en la terminal (desde el root): 
+
+```sh
+python main.py
+```
 
 > [!NOTE]
-**Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC. 
-    ```sh
-    python main.py
-    ```
+**Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC.
 
 > [!WARNING]
 **Atención:** Debido al nivel de calculos realizados, procesar todos los datos demorará bastante tiempo. Asegúrate de estar preparado para ejecutar este comando. 

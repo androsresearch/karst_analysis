@@ -37,7 +37,6 @@
 
 > [!NOTE]
 **Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC. 
-
     ```sh
     python main.py
     ```

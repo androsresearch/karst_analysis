@@ -10,31 +10,33 @@ import glob
 import json
 import traceback
 import pandas as pd
+import time
 
 from modules import load
 from modules import processing
 from modules import analysis
 
+inicio = time.time()
 
 # Parámetros para el filtro Savitzky-Golay
 WINDOW_LENGTH = 25
 POLY_ORDER = 2
 
 # Parámetros para calcular puntos de ruptura
-MAX_BREAKPOINTS = 10
-N_TRIALS = 5
+MAX_BREAKPOINTS = 2
+N_TRIALS = 1
 
 
 def main():
     """
-    Función principal que recorre los archivos .csv en './data/row' y aplica 
+    Función principal que recorre los archivos .csv en './data/raw' y aplica 
     las distintas funciones de procesamiento. Finalmente, guarda los resultados 
     y genera un informe resumen.
     """
     
     # Directorios de entrada y salida
-    input_dir = './data/row'
-    rowdy_dir = './data/rowdy'
+    input_dir = './data/raw'
+    rowdy_dir = './data/rawdy'
     processed_dir = './data/processed'
     results_dir = './data/results'
     
@@ -67,10 +69,10 @@ def main():
             x_positive, y_positive = processing.filter_non_negative_values(x_row, y_row)
 
             # 3. Eliminar Outliers (IQR)
-            x_out, y_out = processing.remove_outliers_iqr(x_positive, y_positive)
+            #x_out, y_out = processing.remove_outliers_iqr(x_positive, y_positive)
 
             # 4. Promediar Grupos por X
-            x_ave, y_ave, duplicates = processing.average_grouped_by_x(x_out, y_out)
+            x_ave, y_ave, duplicates = processing.average_grouped_by_x(x_positive, y_positive)
 
             # Guardar resultado intermedio (rowdy)
             rowdy_path = os.path.join(rowdy_dir, f"{name}_rowdy.csv")
@@ -117,6 +119,7 @@ def main():
     
     # Generar informe resumen
     _print_summary(processed_files, error_files)
+    print("El timepo de ejecucuón fue de: ", time.time()-inicio, "segundos")
 
 
 def _save_to_csv(x_values, y_values, file_path, x_label="Vertical Position [m]", y_label="Corrected sp Cond [uS/cm]"):

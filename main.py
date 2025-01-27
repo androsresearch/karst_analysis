@@ -23,8 +23,8 @@ WINDOW_LENGTH = 25
 POLY_ORDER = 2
 
 # Parámetros para calcular puntos de ruptura
-MAX_BREAKPOINTS = 2
-N_TRIALS = 1
+MAX_BREAKPOINTS = 10
+N_TRIALS = 5
 
 
 def main():

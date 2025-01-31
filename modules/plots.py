@@ -342,24 +342,25 @@ def interactive_segmented_regression(
         plt.legend()
         plt.show()
 
-def plot_sp_cond_boxplots(
+def plot_freshwater_boxplots(
     input_path: str,
     filenames: list = None,
     show_outliers: bool = True
 ):
     """
-    Genera y muestra una figura con boxplots horizontales de la columna
-    'Corrected sp Cond [uS/cm]' para cada archivo CSV especificado.
+    Generates and displays a figure with horizontal boxplots of the
+    'Corrected sp Cond [uS/cm]' column for each specified CSV file.
 
     Parameters
     ----------
     input_path : str
-        Ruta del directorio que contiene los archivos CSV.
+        Path to the directory containing the CSV files.
     filenames : list, optional
-        Lista de nombres de archivos CSV a incluir en la figura.
-        Si no se proporciona, se usarán todos los archivos .csv en `input_path`.
+        List of CSV filenames to include in the figure.
+        If not provided, all '.csv' files in `input_path` will be used.
     show_outliers : bool, optional
-        Si es True, los outliers se muestran en el boxplot. Si es False, se ocultan.
+        If True, outliers are shown in the boxplot.
+        If False, outliers are hidden.
     """
 
     if filenames is None:
@@ -369,7 +370,7 @@ def plot_sp_cond_boxplots(
         csv_files = filenames
 
     if not csv_files:
-        print("No se encontraron archivos CSV en la ruta especificada.")
+        print("No CSV files were found in the specified path.")
         return
 
     data_list = []
@@ -379,51 +380,67 @@ def plot_sp_cond_boxplots(
         file_path = os.path.join(input_path, file)
 
         if not os.path.exists(file_path):
-            print(f"El archivo '{file}' no se encontró en '{input_path}'. Se omite.")
+            print(f"The file '{file}' was not found in '{input_path}'. Skipping.")
             continue
 
         try:
             df = pd.read_csv(file_path)
         except Exception as e:
-            print(f"No fue posible leer '{file}'. Error: {str(e)}")
+            print(f"Could not read the file '{file}'. Error: {str(e)}")
             continue
 
         if 'Corrected sp Cond [uS/cm]' not in df.columns:
-            print(f"El archivo '{file}' no contiene la columna 'Corrected sp Cond [uS/cm]'. Se omite.")
+            print(f"The file '{file}' does not contain the column 'Corrected sp Cond [uS/cm]'. Skipping.")
             continue
 
         sp_cond_values = df['Corrected sp Cond [uS/cm]'].dropna()
 
         if sp_cond_values.empty:
-            print(f"No hay datos en la columna 'Corrected sp Cond [uS/cm]' en '{file}'. Se omite.")
+            print(f"No data were found in the column 'Corrected sp Cond [uS/cm]' in '{file}'. Skipping.")
             continue
         
         data_list.append(sp_cond_values)
-
         label_clean = file.replace("_filter.csv", "")
         labels_list.append(label_clean)
 
-    # Verificar que se haya podido leer al menos un archivo con datos válidos
     if not data_list:
-        print("No se generarán boxplots porque no se encontraron datos válidos.")
+        print("No boxplots will be generated because no valid data were found.")
         return
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, (ax, ax2) = plt.subplots(ncols=2, figsize=(10, 6),
+                                  gridspec_kw={"width_ratios": [3, 1]})
 
-    ax.boxplot(
+    bp = ax.boxplot(
         data_list,
         labels=labels_list,
         vert=False,
-        patch_artist=True, 
-        showfliers=show_outliers  
+        patch_artist=True,
+        showfliers=show_outliers
     )
 
     ax.set_xlabel("Corrected sp Cond [uS/cm]")
     ax.set_ylabel("Freshwater Lens")
     ax.set_title("Boxplots 'Corrected sp Cond [uS/cm]'")
 
-    for box in ax.artists:
-        box.set_facecolor("#87CEEB")  
+    for box in bp['boxes']:
+        box.set_facecolor("#87CEEB")
+
+    ax2.axis("off")
+    ax2.set_ylim(ax.get_ylim())  
+
+    for i, (fliers, data) in enumerate(zip(bp['fliers'], data_list), start=1):
+        n_data = len(data)                  
+        n_outliers = len(fliers.get_xdata()) 
+
+        y_pos = i  
+
+        ax2.text(
+            0.05,  
+            y_pos,
+            f"n = {n_data}, out = {n_outliers}",
+            va='center',
+            fontsize=9
+        )
 
     plt.tight_layout()
     plt.show()

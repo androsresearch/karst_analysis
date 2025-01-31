@@ -55,5 +55,9 @@ python main.py
 
 ## Boxplots 
 
+> [!WARNING]
+**Atención:** Recuerda cambiar el perfil `LRS90D_YSI_2023082` a `LRS90D_YSI_20230827` (**AÑADIRLE EL '7' AL ÚLTIMO**) en `fwl_2024_TW.csv`, de lo contrario te saldrá error.
+
+
 1. Cargar todos los perfiles `data/rawdy` y CSV `fwl_2024_TW.csv` en `data/fwl_map`.
 2. Ejecutar `notebooks/filter_statistics.ipynb`

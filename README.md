@@ -51,3 +51,9 @@ python main.py
 > Para consultar las métricas de evaluación ($R^2$, $R^2$ ajustada, RMS, localización de breakpoints) y visualuzar los resultados, debes ejecutar el notebook `notebooks/evaluation.ipynb`. El único `input` es el nombre (sin extensión) del archivo/perfil que quieras evaluar y visualizar :). 
 
 > Se añade en la data un perfil de ejemplo (`BW5D_YSI_20230822`) para que puedas probar dicho notebook :) 
+
+
+## Boxplots 
+
+1. Cargar todos los perfiles `data/rawdy` y CSV `fwl_2024_TW.csv` en `data/fwl_map`.
+2. Ejecutar `notebooks/filter_statistics.ipynb`

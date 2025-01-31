@@ -7,6 +7,8 @@ from typing import Union, Dict, Any
 from collections import Counter
 from piecewise_regression.main import Fit
 import json
+import glob
+import os
 
 def elbow_max_distance(metric: Union[pd.Series, np.ndarray]) -> int:
     """
@@ -289,7 +291,7 @@ def calculate_metrics_per_segment(fit_model):
 
     return metrics
 
-# # # # analysys For a single segment # # # #
+# # # # analysys for a single segment # # # #
 def segment_data(x:np.array, y:np.array, df:dict, num_breakpoints:int):
 
     """
@@ -392,3 +394,119 @@ def fit_linear_models(segments):
         }
 
     return results
+
+# # # #  Freshwater profiles analysis # # # #
+
+def statics_csv_files(
+    input_folder: str,
+    output_folder: str,
+    target_column: str = "Corrected sp Cond [uS/cm]"
+) -> None:
+    """
+    Reads multiple CSV files from the given input folder, computes descriptive statistics
+    for a specific numerical column, and saves the results in a CSV file inside the output folder.
+    
+    Args:
+        input_folder (str): Path to the folder containing the input CSV files.
+        output_folder (str): Path to the folder where the result CSV file will be saved.
+        target_column (str, optional): Name of the column for which statistics will be calculated.
+                                       Defaults to 'Corrected sp Cond [uS/cm]'.
+
+    The function expects each CSV to have at least:
+        - "Vertical Position [m]" (vertical position in meters)
+        - "Corrected sp Cond [uS/cm]" (specific conductance in µS/cm), or 
+          a column indicated by `target_column`.
+
+    Statistics calculated:
+        - Mean
+        - Standard Deviation (std)
+        - Coefficient of Variation (std / mean)
+        - Minimum
+        - Maximum
+        - Median
+        - 25th, 50th, 75th Percentiles
+        - Interquartile Range (IQR = 75th - 25th)
+
+    Error Handling:
+        - If a file cannot be read or the target column does not exist, it will be skipped.
+        - Any corrupt or empty file will be skipped.
+
+    Returns:
+        None
+    """
+    
+    # Ensure output folder exists
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Pattern to match all CSV files in the input folder
+    csv_pattern = os.path.join(input_folder, "*.csv")
+    
+    results = []
+    
+    for csv_file in glob.glob(csv_pattern):
+        filename = os.path.basename(csv_file)
+        try:
+            # Read CSV
+            df = pd.read_csv(csv_file)
+
+            # Check if target_column exists
+            if target_column not in df.columns:
+                print(f"Skipping file '{filename}' - Column '{target_column}' not found.")
+                continue
+            
+            # Drop NaN values in target_column to avoid errors in calculations
+            data = df[target_column].dropna()
+            
+            # If no valid data points remain, skip
+            if data.empty:
+                print(f"Skipping file '{filename}' - No valid data in column '{target_column}'.")
+                continue
+            
+            # Compute statistics
+            mean_val = data.mean()
+            std_val = data.std()
+            min_val = data.min()
+            max_val = data.max()
+            median_val = data.median()
+            q1 = data.quantile(0.25)
+            q3 = data.quantile(0.75)
+            iqr = q3 - q1
+            cv_val = std_val / mean_val if mean_val != 0 else np.nan
+
+            # Almacena los resultados en una lista de dicts para convertirlo luego en DataFrame
+            results.append({
+                "filename": filename,
+                "mean": mean_val,
+                "std": std_val,
+                "cv": cv_val,  # Coefficient of Variation
+                "min": min_val,
+                "max": max_val,
+                "median": median_val,
+                "25%": q1,
+                "50%": median_val,  # Igual a la mediana
+                "75%": q3,
+                "iqr": iqr
+            })
+        
+        except pd.errors.EmptyDataError:
+            print(f"Skipping file '{filename}' - Empty or corrupt file.")
+        except Exception as e:
+            print(f"Skipping file '{filename}' - Error reading file: {str(e)}")
+
+    results_df = pd.DataFrame(results)
+
+    if results_df.empty:
+        print("No valid CSV files were processed. No output file will be generated.")
+        return
+    
+    ordered_columns = [
+        "filename", "mean", "std", "cv", "min", "max", 
+        "median", "25%", "50%", "75%", "iqr"
+    ]
+    results_df = results_df[ordered_columns]
+
+    output_path = os.path.join(output_folder, "statistics_profiles.csv")
+    results_df.to_csv(output_path, index=False)
+    print(f"Statistics have been successfully saved to '{output_path}'.")
+
+    return results_df

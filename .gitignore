@@ -1,3 +1,9 @@
+### Data ###
+data/raw
+data/rawdy
+data/processed
+data/results
+
 ### Linux ###
 *~
 

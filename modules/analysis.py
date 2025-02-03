@@ -397,9 +397,10 @@ def fit_linear_models(segments):
 
 # # # #  Freshwater profiles analysis # # # #
 
-def statics_csv_files(
+def statistics_csv_files(
     input_folder: str,
     output_folder: str,
+    name_folder: str,
     target_column: str = "Corrected sp Cond [uS/cm]"
 ) -> None:
     """
@@ -505,7 +506,7 @@ def statics_csv_files(
     ]
     results_df = results_df[ordered_columns]
 
-    output_path = os.path.join(output_folder, "statistics_profiles.csv")
+    output_path = os.path.join(output_folder, f"statistics_profiles_{name_folder}.csv")
     results_df.to_csv(output_path, index=False)
     print(f"Statistics have been successfully saved to '{output_path}'.")
 

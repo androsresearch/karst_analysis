@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
-from typing import Tuple
+from typing import Optional, List, Tuple
 import os
 
 def filter_non_negative_values(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -166,54 +166,62 @@ def apply_savgol_filter(data: np.ndarray, window_length: int, poly_order: int) -
     # Apply the Savitzky-Golay filter
     return savgol_filter(data, window_length=window_length, polyorder=poly_order)
 
-def filter_csv_by_vertical_position(df: pd.DataFrame, input_path: str, output_path: str) -> None:
+def filter_csv_by_vertical_position(
+    df: pd.DataFrame,
+    input_path: str,
+    output_path: str,
+    required_columns: Optional[List[str]] = None
+) -> None:
     """
-    Process multiple CSV files based on a reference vertical position, and save the filtered data.
+    Process multiple CSV files based on a reference vertical position and save the filtered data.
     
     Parameters
     ----------
     df : pd.DataFrame
-        A DataFrame with at least the following columns:
-            - 'name_file': str, name of the CSV file to process.
-            - 'chosen_vertical_position': numeric, filter threshold for 'Vertical Position [m]'.
+        A DataFrame that must include at least the following columns:
+            - 'name_file': str, the name of the CSV file to process.
+            - 'chosen_vertical_position': numeric, the filter threshold for 'Vertical Position [m]'.
     input_path : str
-        Directory where the input CSV files are located.
+        The directory where the input CSV files are located.
     output_path : str
-        Directory where the filtered CSV files will be saved.
+        The directory where the filtered CSV files will be saved.
+    required_columns : Optional[List[str]]
+        A list of column names required in the CSV file. Defaults to 
+        ['Vertical Position [m]', 'Corrected sp Cond [uS/cm]'] if not provided.
     """
-
+    
+    if required_columns is None:
+        required_columns = ['Vertical Position [m]', 'Corrected sp Cond [uS/cm]']
+    
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-
-    required_columns = ['Vertical Position [m]', 'Corrected sp Cond [uS/cm]']
-
+    
     for index, row in df.iterrows():
         file_name = row['name_file']
         chosen_vertical_position = row['chosen_vertical_position']
-
-        input_file = os.path.join(input_path, f'{file_name}')
-
+        
+        input_file = os.path.join(input_path, file_name)
+        
         if not os.path.isfile(input_file):
-            print(f"[Aviso] El archivo '{file_name}' no se encuentra en '{input_path}'. Se omite este registro.")
+            print(f"[Warning] File '{file_name}' not found in '{input_path}'. Skipping this record.")
             continue
-
+        
         try:
             data = pd.read_csv(input_file)
-
+            
             if not set(required_columns).issubset(data.columns):
-                print(f"[Aviso] El archivo '{file_name}' no contiene las columnas requeridas {required_columns}.")
+                print(f"[Warning] File '{file_name}' does not contain the required columns: {required_columns}.")
                 continue
-
+            
             data = data[required_columns]
-
-            data_filtered = data[data['Vertical Position [m]'] <= chosen_vertical_position]
-
-            clean_name = file_name.replace("_rowdy.csv", "") 
+            data_filtered = data[data[required_columns[0]] <= chosen_vertical_position]
+            
+            clean_name = file_name.replace("_rowdy.csv", "")
+            clean_name = file_name.replace(".csv","")
             output_file = os.path.join(output_path, f'{clean_name}_filter.csv')
-
+            
             data_filtered.to_csv(output_file, index=False)
-            print(f"[Info] Archivo procesado y guardado: '{output_file}'")
-
+            print(f"[Info] Processed and saved file: '{output_file}'")
+            
         except Exception as e:
-            print(f"[Error] Ocurrió un error procesando el archivo '{file_name}': {e}")
-
+            print(f"[Error] An error occurred while processing file '{file_name}': {e}")

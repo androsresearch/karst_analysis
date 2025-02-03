@@ -345,11 +345,12 @@ def interactive_segmented_regression(
 def plot_freshwater_boxplots(
     input_path: str,
     filenames: list = None,
-    show_outliers: bool = True
+    show_outliers: bool = True,
+    target_column: str = 'Corrected sp Cond [uS/cm]'
 ):
     """
     Generates and displays a figure with horizontal boxplots of the
-    'Corrected sp Cond [uS/cm]' column for each specified CSV file.
+    `target_column` for each specified CSV file.
 
     Parameters
     ----------
@@ -361,7 +362,15 @@ def plot_freshwater_boxplots(
     show_outliers : bool, optional
         If True, outliers are shown in the boxplot.
         If False, outliers are hidden.
+    target_column : str, optional
+        Name of the column to generate boxplots for.
+        Default is 'Corrected sp Cond [uS/cm]'.
     """
+
+    import os
+    import glob
+    import pandas as pd
+    import matplotlib.pyplot as plt
 
     if filenames is None:
         csv_files = glob.glob(os.path.join(input_path, "*.csv"))
@@ -389,17 +398,17 @@ def plot_freshwater_boxplots(
             print(f"Could not read the file '{file}'. Error: {str(e)}")
             continue
 
-        if 'Corrected sp Cond [uS/cm]' not in df.columns:
-            print(f"The file '{file}' does not contain the column 'Corrected sp Cond [uS/cm]'. Skipping.")
+        if target_column not in df.columns:
+            print(f"The file '{file}' does not contain the column '{target_column}'. Skipping.")
             continue
 
-        sp_cond_values = df['Corrected sp Cond [uS/cm]'].dropna()
+        column_values = df[target_column].dropna()
 
-        if sp_cond_values.empty:
-            print(f"No data were found in the column 'Corrected sp Cond [uS/cm]' in '{file}'. Skipping.")
+        if column_values.empty:
+            print(f"No data were found in the column '{target_column}' in '{file}'. Skipping.")
             continue
         
-        data_list.append(sp_cond_values)
+        data_list.append(column_values)
         label_clean = file.replace("_filter.csv", "")
         labels_list.append(label_clean)
 
@@ -418,9 +427,9 @@ def plot_freshwater_boxplots(
         showfliers=show_outliers
     )
 
-    ax.set_xlabel("Corrected sp Cond [uS/cm]")
+    ax.set_xlabel(target_column)
     ax.set_ylabel("Freshwater Lens")
-    ax.set_title("Boxplots 'Corrected sp Cond [uS/cm]'")
+    ax.set_title(f"Boxplots '{target_column}'")
 
     for box in bp['boxes']:
         box.set_facecolor("#87CEEB")

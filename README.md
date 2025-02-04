@@ -1,63 +1,55 @@
+**Installation**
 
-> [!NOTE] 
-**Nota para Mar**: Los flujos de datos no soy muy elegantes, pero funcionan jsjs :D
-
-
-## Instalación
-
-1. Clona el repositorio
+1. Clone the repository:
     ```sh
-    git clone <URL_DEL_REPOSITORIO>
-    cd <NOMBRE_DEL_REPOSITORIO>
+    git clone <REPOSITORY_URL>
+    cd <REPOSITORY_NAME>
     ```
 
-2. Crea un entorno virtual
-
+2. Create a virtual environment:
     ```sh
     python -m venv venv
     ```
 
-4. Activa el entorno virtual
-    - En Windows:
-        ```sh
-        .\venv\Scripts\activate
-        ```
-    - En macOS/Linux:
-        ```sh
-        source venv/bin/activate
-        ```
+3. Activate the virtual environment:
+   - On Windows:
+     ```sh
+     .\venv\Scripts\activate
+     ```
+   - On macOS/Linux:
+     ```sh
+     source venv/bin/activate
+     ```
 
-5. Instala las dependencias del 
+4. Install the dependencies:
     ```sh
     pip install -r requirements.txt
     ```
 
-6. LLena la carpeta `data/row` con todos los archivos `.csv` a procesar
+5. Place all `.csv` files to be processed in the `data/row` folder.
 
-7. ¡Haz que la mágia suceda!, ejecuta en la terminal (desde el root): 
+6. Make the magic happen by running (from the project root):
+    ```sh
+    python main.py
+    ```
 
-```sh
-python main.py
-```
+> [!NOTE]  
+> **Information:** It is possible to modify the Savitzky-Golay filter parameters as well as the segmented fitting and BIC parameters in `main.py`.
 
-> [!NOTE]
-**Información:** Puedes modificar los parámetros desde `main.py` del filtro Savitzky-Golay y los parámetro para el cálculo de ajuste segmentado y BIC.
+> [!WARNING]  
+> **Attention:** Because of the level of calculations involved, processing all the data can take a considerable amount of time. Make sure everything is ready before running this command.
 
-> [!WARNING]
-**Atención:** Debido al nivel de calculos realizados, procesar todos los datos demorará bastante tiempo. Asegúrate de estar preparado para ejecutar este comando. 
+---
 
-## Métricas y gráficas
+**Metrics and Charts**
 
-> Para consultar las métricas de evaluación ($R^2$, $R^2$ ajustada, RMS, localización de breakpoints) y visualuzar los resultados, debes ejecutar el notebook `notebooks/evaluation.ipynb`. El único `input` es el nombre (sin extensión) del archivo/perfil que quieras evaluar y visualizar :). 
+To check the evaluation metrics (\(R^2\), adjusted \(R^2\), RMS, breakpoint locations) and visualize the results, run the `notebooks/evaluation.ipynb` notebook. The only required input is the file/profile name (without extension) that should be evaluated and displayed.  
 
-> Se añade en la data un perfil de ejemplo (`BW5D_YSI_20230822`) para que puedas probar dicho notebook :) 
+An example profile (`BW5D_YSI_20230822`) is included in the data folder for testing the notebook.
 
+---
 
-## Boxplots 
+**Boxplots**
 
-> [!WARNING]
-**Atención:** Recuerda cambiar el perfil `LRS90D_YSI_2023082` a `LRS90D_YSI_20230827` (**AÑADIRLE EL '7' AL ÚLTIMO**) en `fwl_2024_TW.csv`, de lo contrario te saldrá error.
-
-
-1. Cargar todos los perfiles `data/rawdy` (y/o `raw`) y CSV `fwl_2024_TW.csv` en `data/fwl_map`.
-2. Seguir las instrucciones de `notebooks/filter_statistics.ipynb` y ejecutar.
+1. Load all profiles in `data/rawdy` and the CSV file `fwl_2024_TW.csv` into `data/fwl_map`.
+2. Run `notebooks/filter_statistics.ipynb`.

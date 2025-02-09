@@ -200,13 +200,14 @@ def plot_histogram(
 
     return fig
 
-def plot_segments(segments_info, metrics):
+def plot_segments(segments_info, metrics, title: str =""):
     """
     Plot each segment with its corresponding data and fitted model in subplots.
 
     Parameters:
     - segments_info (dict): Dictionary returned by `extract_segments`.
     - metrics (list): A list of dictionaries containing metrics for each segment.
+    - title (str, optional): Additional text to be included in the plot title.
 
     """
     segments = segments_info["segments"]
@@ -252,13 +253,20 @@ def plot_segments(segments_info, metrics):
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
+    # Modification here to add the optional title
+    plot_title = ""
+    if title:
+        plot_title += f" - {title}"  # Concatenates the optional title if provided
+    fig.suptitle(plot_title, fontsize=16, fontweight='bold')
+
     plt.tight_layout()
     plt.show()
 
 def interactive_segmented_regression(
     x: np.ndarray,
     y: np.ndarray,
-    df: Any
+    df: Any,
+    title: str = "" 
 ) -> None:
     """
     Generate an interactive plot for segmented regression with 0 to 10 breakpoints.
@@ -270,13 +278,14 @@ def interactive_segmented_regression(
     df (Any): DataFrame with columns:
         - 'n_breakpoints': Number of breakpoints (0 to 10).
         - 'estimates': Dictionary with keys and metrics of interest.
+    title (str, optional): Additional text to be included in the plot title.
 
     Returns:
     --------
     None
     """
     unique_breakpoints = sorted(df['n_breakpoints'].unique())
-    
+
     def extract_estimate(param: Any) -> float:
         return param.get('estimate', 0.0) if isinstance(param, dict) else param
 
@@ -320,16 +329,36 @@ def interactive_segmented_regression(
         plt.scatter(x, y, color='blue', alpha=0.6, label='Datos Reales')
         plt.plot(x_sorted, y_hat, color='darkorange', lw=3, label='Ajuste Segmentado')
 
-        for bp in breakpoints:
+        # Annotations for breakpoints and their values in the regression
+        for i, bp in enumerate(breakpoints, start=1):
             val_bp = c + alpha1 * bp
             for b, bp_j in zip(betas, breakpoints):
                 if bp > bp_j:
                     val_bp += b * (bp - bp_j)
             plt.scatter(bp, val_bp, color='limegreen', s=100, edgecolors='k', zorder=5)
 
+            # Add a number above the breakpoint
+            plt.annotate(
+                str(i),  # Breakpoint number
+                (bp, val_bp),
+                textcoords="offset points",
+                xytext=(0, 10),  # Pixel displacement
+                ha='center',
+                fontsize=12,
+                fontweight='bold',
+                color='black',
+                bbox=dict(boxstyle='round,pad=0.3', edgecolor='black', facecolor='white', alpha=0.8)
+            )
+
         plt.xlabel('Vertical Position [m]')
         plt.ylabel('Corrected sp Cond [uS/cm]')
         plt.title(f'Segmented Regression with {n_breakpoints} Breakpoint(s): ({len(x)}) points')
+        # Modification to add the optional title
+        plot_title = f'Segmented Regression with {n_breakpoints} Breakpoint(s): ({len(x)}) points'
+        if title:
+            plot_title += f" - {title}"  # Concatenates the optional title if provided
+        plt.title(plot_title)
+
 
         plt.text(
             0.05, 0.95,
@@ -339,8 +368,14 @@ def interactive_segmented_regression(
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.7)
         )
 
+        # Add major and minor grid lines
+        plt.grid(which='major', linestyle='-', linewidth=0.7, alpha=0.8)
+        plt.grid(which='minor', linestyle='--', linewidth=0.6, alpha=0.8)
+        plt.minorticks_on()  # Enable minor ticks on the axes
+
         plt.legend()
         plt.show()
+
 
 def plot_freshwater_boxplots(
     input_path: str,

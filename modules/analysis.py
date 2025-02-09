@@ -208,12 +208,14 @@ def extract_breakpoints(model):
         breakpoints_y.append(bp_y)
         conf_intervals.append(bp_conf)
 
-    # Create a DataFrame
+    # Create a DataFrame with an index starting at 1
     df = pd.DataFrame({
         "Breakpoint X Position": breakpoints_x,
         "Breakpoint Y Position": breakpoints_y,
         "Confidence Interval (X)": conf_intervals
     })
+
+    df.index = range(1, len(df) + 1)  # Set index to start at 1
 
     return df
 

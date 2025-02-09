@@ -326,8 +326,8 @@ def interactive_segmented_regression(
         RSS, TSS, R2, R2_ajus = analysis.get_global_metrics(np.array(y), np.array(y_pred), p)
 
         plt.figure(figsize=(10, 6))
-        plt.scatter(x, y, color='blue', alpha=0.6, label='Datos Reales')
-        plt.plot(x_sorted, y_hat, color='darkorange', lw=3, label='Ajuste Segmentado')
+        plt.scatter(x, y, color='blue', alpha=0.6, label='Real Data')
+        plt.plot(x_sorted, y_hat, color='darkorange', lw=3, label='Piecewise Linear Fit')
 
         # Annotations for breakpoints and their values in the regression
         for i, bp in enumerate(breakpoints, start=1):
@@ -362,7 +362,7 @@ def interactive_segmented_regression(
 
         plt.text(
             0.05, 0.95,
-            f"RSS: {RSS:.2f}\nTSS: {TSS:.2f}\n$R^2$: {R2:.4f}\n$R^2$ Ajustado: {R2_ajus:.4f}",
+            f"RSS: {RSS:.2f}\nTSS: {TSS:.2f}\n$R^2$: {R2:.4f}\n$R^2$ Adjusted: {R2_ajus:.4f}",
             transform=plt.gca().transAxes,
             verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.7)

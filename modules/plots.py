@@ -289,7 +289,7 @@ def interactive_segmented_regression(
     def extract_estimate(param: Any) -> float:
         return param.get('estimate', 0.0) if isinstance(param, dict) else param
 
-    @interact(n_breakpoints=IntSlider(min=0, max=10, step=1, value=0))
+    @interact(n_breakpoints=IntSlider(min=0, max=10, step=1, value=2))
     def update_plot(n_breakpoints: int = 0) -> None:
         row = df[df['n_breakpoints'] == n_breakpoints]
         if row.empty:

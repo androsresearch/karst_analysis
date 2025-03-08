@@ -53,3 +53,10 @@ An example profile (`BW5D_YSI_20230822`) is included in the data folder for test
 
 1. Load all profiles in `data/rawdy` and the CSV file `fwl_2024_TW.csv` into `data/fwl_map`.
 2. Run `notebooks/filter_statistics.ipynb`.
+
+
+---
+
+### **Statistics by Zone**  
+
+1. Run and adjust the profile parameters to examine in `notebooks/statistics_zones.ipynb`.

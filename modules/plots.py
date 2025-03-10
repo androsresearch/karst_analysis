@@ -24,7 +24,8 @@ def plot_data(
     y2_axis_label: str = "Secondary Y-Axis",
     use_secondary_axis: bool = False,
     enable_error_x: bool = False,
-    enable_error_y: bool = False
+    enable_error_y: bool = False,
+    fresh_cap: bool = False  # If True, zoom in to the first 5 meters of the x-axis and adjust the y-axis based on the data in that range.
 ) -> None:
     """
     Plot data using Plotly with customizable aesthetics and optional error bars.
@@ -136,6 +137,24 @@ def plot_data(
             zerolinecolor='Gray',
             secondary_y=True
         )
+
+    if fresh_cap:
+        # Filter data for x <= 5
+        filtered_points = [(x, y) for x, y in zip(x_values, y_values) if x <= 5]
+        if filtered_points:
+            x_filtered, y_filtered = zip(*filtered_points)
+            max_y_filtered = max(y_filtered)
+            min_y_filtered = min(y_filtered)
+            # Update x-axis range to [0, 5]
+            fig.update_xaxes(range=[0, 5])
+            # Update y-axis range based on whether a secondary axis is used or not.
+            if use_secondary_axis:
+                fig.update_yaxes(range=[min_y_filtered, max_y_filtered], secondary_y=False)
+            else:
+                fig.update_yaxes(range=[min_y_filtered, max_y_filtered])
+        else:
+            print("No data available with x <= 5 to apply fresh_cap.")
+
 
     fig.show()
 

@@ -509,3 +509,4 @@ def plot_freshwater_boxplots(
     plt.show()
 
     return fig
+

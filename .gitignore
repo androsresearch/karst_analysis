@@ -4,6 +4,10 @@ data/rawdy
 data/processed
 data/results
 
+### Data ###
+notebooks/processor_mg.ipynb
+notebooks/evaluation_mg.ipynb
+
 ### Linux ###
 *~
 

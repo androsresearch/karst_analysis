@@ -275,7 +275,7 @@ def plot_segments(segments_info, metrics, title: str =""):
     # Modification here to add the optional title
     plot_title = ""
     if title:
-        plot_title += f" - {title}"  # Concatenates the optional title if provided
+        plot_title += f"{title}"  # Concatenates the optional title if provided
     fig.suptitle(plot_title, fontsize=16, fontweight='bold')
 
     plt.tight_layout()
@@ -285,7 +285,8 @@ def interactive_segmented_regression(
     x: np.ndarray,
     y: np.ndarray,
     df: Any,
-    title: str = "" 
+    title: str = "",
+    breakpoints: int = 2
 ) -> None:
     """
     Generate an interactive plot for segmented regression with 0 to 10 breakpoints.
@@ -308,7 +309,7 @@ def interactive_segmented_regression(
     def extract_estimate(param: Any) -> float:
         return param.get('estimate', 0.0) if isinstance(param, dict) else param
 
-    @interact(n_breakpoints=IntSlider(min=0, max=10, step=1, value=2))
+    @interact(n_breakpoints=IntSlider(min=0, max=10, step=1, value=breakpoints))
     def update_plot(n_breakpoints: int = 0) -> None:
         row = df[df['n_breakpoints'] == n_breakpoints]
         if row.empty:
@@ -394,7 +395,6 @@ def interactive_segmented_regression(
 
         plt.legend()
         plt.show()
-
 
 def plot_freshwater_boxplots(
     input_path: str,
@@ -509,3 +509,4 @@ def plot_freshwater_boxplots(
     plt.show()
 
     return fig
+

@@ -1,7 +1,7 @@
 from piecewise_regression import Fit
 import numpy as np
 
-def rebuild_model(xx, yy, params_dict):
+def rebuild_model(xx, yy, params_dict, tolerance=1e-5, min_distance=0.01):
     """
     Reconstruye un modelo `Fit` a partir de un diccionario de parámetros.
 
@@ -26,7 +26,7 @@ def rebuild_model(xx, yy, params_dict):
     breakpoints = [estimates[f"breakpoint{i+1}"]["estimate"] for i in range(n_breakpoints)]
 
     # Crear el modelo `Fit` utilizando los breakpoints extraídos
-    rebuilt_model = Fit(xx, yy, start_values=breakpoints, n_breakpoints=n_breakpoints, n_boot=0)
+    rebuilt_model = Fit(xx, yy, start_values=breakpoints, n_breakpoints=n_breakpoints, n_boot=0, tolerance=tolerance, min_distance_between_breakpoints=min_distance)
 
     return rebuilt_model
 

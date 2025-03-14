@@ -52,7 +52,7 @@ def elbow_max_distance(metric: Union[pd.Series, np.ndarray]) -> int:
 
     return elbow_index
 
-def best_n_breakpoints(x, y, max_breakpoints: int = 10, n_trials: int = 3) -> Dict[str, Any]:
+def best_n_breakpoints(x, y, max_breakpoints: int = 10, n_trials: int = 3, tolerance: float = 1e-5, min_distance: float = 0.01) -> Dict[str, Any]:
     """
     Finds the optimal number of breakpoints based on BIC and an additional metric (e.g., RSS) 
     and stores the results in a dictionary.
@@ -76,7 +76,7 @@ def best_n_breakpoints(x, y, max_breakpoints: int = 10, n_trials: int = 3) -> Di
 
     for i in range(n_trials):
         # Generate model and retrieve DataFrame with model summaries
-        ms = pw.ModelSelection(x, y, max_breakpoints)
+        ms = pw.ModelSelection(x, y, max_breakpoints, tolerance=tolerance, min_distance_between_breakpoints=min_distance)
         ms_df = pd.DataFrame(ms.model_summaries)
 
         # Extract BIC and RSS values

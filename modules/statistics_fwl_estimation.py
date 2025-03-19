@@ -1,6 +1,8 @@
 import os
 import random
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -285,3 +287,210 @@ def generate_boxplots(
     
     return fig
 
+def generate_boxplots_matplotlib(
+    filtered_data: Dict[str, Dict[str, pd.DataFrame]],
+    variable: str,
+    show_outliers: bool = True,
+    order: Optional[List[str]] = None,
+    legend_x: float = 1.02,
+    legend_y: float = 1.0,
+    legend_orientation: str = 'vertical',
+    mirror_top_axis: bool = False,
+    enable_minor_ticks: bool = False,
+    draw_vertical_line: bool = False
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Generates horizontal boxplots with Matplotlib for each well and each filtering method.
+    Optionally:
+        - Adds a mirrored X-axis on the top (mirror_top_axis).
+        - Displays minor ticks every 1000 units (enable_minor_ticks).
+        - Draws a dotted vertical line at x=1452.9 (draw_vertical_line).
+
+    Args:
+        filtered_data (Dict[str, Dict[str, pd.DataFrame]]):
+            Nested dictionary containing the filtered data.
+            - First key: Well ID
+            - Second key: Filtering method (e.g., 'IC', 'BIC', 'DGH').
+        variable (str):
+            Name of the column to be plotted (e.g., "Corrected sp Cond [uS/cm]" or "Vertical Position [m]").
+        show_outliers (bool):
+            Whether to display outliers in the boxplots.
+        order (Optional[List[str]]):
+            A list defining the order of the wells (well IDs) on the Y-axis.
+            If a well ID is not listed here, it will be ignored.
+            If not provided, the natural reading order of `filtered_data` is used.
+        legend_x (float):
+            X position where the legend is anchored.
+        legend_y (float):
+            Y position where the legend is anchored.
+        legend_orientation (str):
+            Legend orientation: 'vertical' or 'horizontal'.
+        mirror_top_axis (bool):
+            If True, adds a mirrored X-axis at the top.
+        enable_minor_ticks (bool):
+            If True, activates minor ticks on the X-axis every 1000 units.
+        draw_vertical_line (bool):
+            If True, draws a dotted vertical line at x=1452.9.
+
+    Returns:
+        (fig, ax): The Matplotlib Figure and Axes objects.
+    """
+
+    # Dictionary to assign a specific color to each filtering method
+    method_colors = {
+        'BIC': 'blue',
+        'IC': 'red',
+        'DGH': 'green'
+    }
+
+    # 1) Collect data in a list of tuples (well_id, method, values) 
+    #    in the natural reading order of 'filtered_data'
+    plot_data = []
+    for well_id, methods_dict in filtered_data.items():
+        for method, df in methods_dict.items():
+            values = df[variable].values
+            plot_data.append((well_id, method, values))
+
+    # 2) If an 'order' list is provided, filter and reorder 'plot_data' 
+    #    based on the position of the well_id in 'order'
+    if order is not None:
+        # Create a dictionary to store the index of each well ID in 'order'
+        order_index = {well: i for i, well in enumerate(order)}
+
+        # Keep only those tuples whose well_id is in 'order'
+        plot_data = [item for item in plot_data if item[0] in order_index]
+
+        # Sort by the index given in 'order'
+        plot_data.sort(key=lambda x: order_index[x[0]])
+
+    # 3) Build the final lists for plotting
+    group_labels = []
+    group_data = []
+    method_list = []
+
+    # Create labels, data arrays, and method entries for each tuple
+    for well_id, method, values in plot_data:
+        label = f"{well_id} - {method}"
+        group_labels.append(label)
+        group_data.append(values)
+        method_list.append(method)
+
+    def calculate_outliers(data: np.ndarray) -> int:
+        """
+        Counts the number of outliers using the Interquartile Range (IQR) method.
+        Outliers are points lying outside 1.5 * IQR from the quartiles.
+        """
+        if data.size == 0:
+            return 0
+        q1, q3 = np.percentile(data, [25, 75])
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        return int(np.sum((data < lower_bound) | (data > upper_bound)))
+
+    # Create the figure and axes. 
+    # The figure height depends on the number of labels.
+    fig, ax = plt.subplots(figsize=(12, len(group_labels) * 0.5 + 2))
+
+    # Positions on the Y-axis for each boxplot
+    box_positions = np.arange(len(group_labels))
+
+    # Decide how to display outliers: 'o' for showing, '' for hiding
+    sym = 'o' if show_outliers else ''
+
+    # Keep track of methods already added to the legend
+    used_methods = set()
+
+    # 4) Create boxplots grouped by method to ensure consistent colors
+    unique_methods = sorted(set(method_list))
+    for method in unique_methods:
+        # Collect positions and data for this method
+        method_positions = []
+        method_data = []
+        for i, (lbl, dat, meth) in enumerate(zip(group_labels, group_data, method_list)):
+            if meth == method:
+                method_positions.append(i)
+                method_data.append(dat)
+
+        # If there is data for this method, draw the boxplot
+        if method_positions:
+            color = method_colors.get(method, 'gray')
+            bp = ax.boxplot(
+                method_data,
+                positions=method_positions,
+                sym=sym,
+                vert=False,
+                widths=0.6,
+                patch_artist=True
+            )
+
+            # Customize boxplot colors
+            for box in bp['boxes']:
+                box.set(color=color, facecolor=color, alpha=0.7)
+            for whisker in bp['whiskers']:
+                whisker.set(color=color)
+            for cap in bp['caps']:
+                cap.set(color=color)
+            for median in bp['medians']:
+                median.set(color='black')
+            for flier in bp['fliers']:
+                flier.set(marker='o', markerfacecolor=color, markersize=5, alpha=0.7)
+
+            # Add legend entry for this method, but only once
+            if method not in used_methods:
+                ax.plot([], [], color=color, label=method)
+                used_methods.add(method)
+
+    # 5) Add annotations to the right side indicating 'n' and outliers
+    for i, data in enumerate(group_data):
+        n_points = len(data)
+        n_outliers = calculate_outliers(data)
+        annotation_text = f"n={n_points}, out={n_outliers}"
+        x_max = ax.get_xlim()[1]
+        ax.text(x_max * 1.05, i, annotation_text,
+                verticalalignment='center', fontsize=10)
+
+    # Configure the Y-axis with labels
+    ax.set_yticks(box_positions)
+    ax.set_yticklabels(group_labels)
+
+    # Set axis labels and title
+    ax.set_xlabel(variable)
+    ax.set_ylabel("Well - Filtering Method")
+    ax.set_title(f"Boxplots of {variable} by Well and Filtering Method",
+                 pad=20, y=1.01)
+
+    # Display major grid on the X-axis
+    ax.grid(True, which='major', axis='x', linestyle='--', alpha=0.7)
+
+    # Optionally enable minor ticks every 1000 units on the X-axis
+    if enable_minor_ticks:
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1000))
+        ax.grid(True, which='minor', axis='x', linestyle=':', alpha=0.2)
+
+    # Optionally draw a vertical line at x=1452.9
+    if draw_vertical_line:
+        ax.axvline(x=1452.9, color='black', linestyle='--', label='x = 1452.9')
+
+    # Optionally add a mirrored X-axis at the top
+    if mirror_top_axis:
+        ax.tick_params(top=True, labeltop=True, bottom=True, labelbottom=True)
+
+    # Adjust right margin to leave room for annotations
+    plt.subplots_adjust(right=0.75)
+
+    # Configure the legend
+    legend_loc = 'upper right' if legend_x > 0.5 else 'upper left'
+    ax.legend(
+        loc=legend_loc,
+        bbox_to_anchor=(legend_x, legend_y),
+        frameon=True,
+        framealpha=0.8,
+        title="Method"
+    )
+
+    # Final layout adjustments
+    fig.tight_layout()
+
+    # Return the figure and axes for further use if needed
+    return fig, ax

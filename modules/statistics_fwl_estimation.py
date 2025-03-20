@@ -30,7 +30,6 @@ def get_file_suffix(subfolder: str) -> str:
         raise ValueError(f"Invalid subfolder name: {subfolder}")
     return mapping[key]
 
-
 # =============================================================================
 # Data Filtering Module
 # =============================================================================
@@ -102,6 +101,102 @@ def load_and_filter_data(
             filtered_data[well_id][method] = filtered_df
     
     return filtered_data
+
+# =============================================================================
+# Statistical Analysis Module
+# =============================================================================
+
+def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: str) -> pd.DataFrame:
+    """
+    Compute descriptive statistics for each well and method based on the specified column,
+    and merge the resulting DataFrame with vertical position values from `file_info_df`.
+
+    Parameters:
+    -----------
+    filtered_data : dict
+        A nested dictionary where keys are well IDs (base name of the well) and values are
+        dictionaries with method names ('IC', 'BIC', 'DGH') as keys and DataFrames as values.
+    file_info_df : pd.DataFrame
+        A DataFrame containing vertical position values for each well and method.
+    column : str
+        The column for which to compute statistics. Must be one of:
+            - "Vertical Position [m]"
+            - "Corrected sp Cond [uS/cm]"
+
+    Returns:
+    --------
+    pd.DataFrame
+        A DataFrame with the following columns:
+         - ID: Base name of the well
+         - Method: Filtering method used (e.g. IC, BIC, DGH)
+         - cv: Coefficient of Variation (std / mean)
+         - iqr: Interquartile Range (75th percentile - 25th percentile)
+         - vp_selected: The vertical position selected for the given method.
+    """
+
+    stats_list = []
+
+    # Iterate over each well in the filtered_data dictionary
+    for well_id, methods in filtered_data.items():
+        # Get corresponding row in file_info_df based on well_id
+        vp_row = file_info_df[file_info_df["ID"] == well_id]
+
+        # Ensure the well exists in the file_info_df
+        if vp_row.empty:
+            continue
+
+        for method, df in methods.items():
+            if column not in df.columns:
+                continue  # Skip if the column is not available
+            
+            # Extract the column and drop missing values
+            data_series = df[column].dropna()
+            if data_series.empty:
+                continue  # Skip if no data is present after filtering
+
+            # Compute statistics
+            mean_val = data_series.mean()
+            std_val = data_series.std()
+            cv_val = std_val / mean_val if mean_val != 0 else float('nan')
+            min_val = data_series.min()
+            max_val = data_series.max()
+            median_val = data_series.median()
+            percentile_25 = data_series.quantile(0.25)
+            percentile_50 = data_series.quantile(0.50)  # equivalent to median
+            percentile_75 = data_series.quantile(0.75)
+            iqr_val = percentile_75 - percentile_25
+
+            # Assign vertical position based on method
+            if method == "DGH":
+                vp_selected = vp_row["vp_dgh"].values[0]
+            elif method == "BIC":
+                vp_selected = vp_row["vp_bic"].values[0]
+            elif method == "IC":
+                vp_selected = vp_row["vp_ic"].values[0]
+            else:
+                vp_selected = None  # Just in case an unknown method appears
+
+            # Append results
+            stats_list.append({
+                "id": well_id,
+                "method": method,
+                "fwl_thickness": vp_selected,
+                "mean": mean_val,
+                "std": std_val,
+                "cv": cv_val,
+                "min": min_val,
+                "max": max_val,
+                "median": median_val,
+                "25%": percentile_25,
+                "50%": percentile_50,
+                "75%": percentile_75,
+                "iqr": iqr_val
+            })
+
+    # Convert the list to a DataFrame
+    stats_df = pd.DataFrame(stats_list)
+
+    return stats_df
 
 
 # =============================================================================
@@ -374,19 +469,6 @@ def generate_boxplots_matplotlib(
         group_labels.append(label)
         group_data.append(values)
         method_list.append(method)
-
-    def calculate_outliers(data: np.ndarray) -> int:
-        """
-        Counts the number of outliers using the Interquartile Range (IQR) method.
-        Outliers are points lying outside 1.5 * IQR from the quartiles.
-        """
-        if data.size == 0:
-            return 0
-        q1, q3 = np.percentile(data, [25, 75])
-        iqr = q3 - q1
-        lower_bound = q1 - 1.5 * iqr
-        upper_bound = q3 + 1.5 * iqr
-        return int(np.sum((data < lower_bound) | (data > upper_bound)))
 
     # Create the figure and axes. 
     # The figure height depends on the number of labels.

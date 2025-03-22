@@ -261,6 +261,7 @@ $RECYCLE.BIN/
 
 data/
 !data/selection_fwl_ic_bic_dgh.csv
+# !data/dgh_fwl_estimation.csv
 
 # profiles_70_75_processor.ipynb
 # profiles_70_75_evaluation.ipynb

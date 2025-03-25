@@ -176,14 +176,10 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
             percentile_75 = data_series.quantile(0.75)
             iqr_val = percentile_75 - percentile_25
 
-            # Calcular el número total de datos
             count_val = data_series.count()
-
-            # Definir los límites para considerar outliers
+            
             lower_bound = percentile_25 - 1.5 * iqr_val
             upper_bound = percentile_75 + 1.5 * iqr_val
-
-            # Calcular el número de outliers
             outliers_count = data_series[(data_series < lower_bound) | (data_series > upper_bound)].count()
 
             # Assign vertical position based on method
@@ -219,7 +215,6 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
     stats_df = pd.DataFrame(stats_list)
 
     return stats_df
-
 
 
 # =============================================================================
@@ -410,6 +405,7 @@ def generate_boxplots_matplotlib(
     variable: str,
     show_outliers: bool = True,
     order: Optional[List[str]] = None,
+    methods_to_show: Optional[List[str]] = None,  
     legend_x: float = 1.02,
     legend_y: float = 1.0,
     legend_orientation: str = 'vertical',
@@ -437,6 +433,10 @@ def generate_boxplots_matplotlib(
             A list defining the order of the wells (well IDs) on the Y-axis.
             If a well ID is not listed here, it will be ignored.
             If not provided, the natural reading order of `filtered_data` is used.
+        methods_to_show (Optional[List[str]]):
+            List of filtering methods to display (e.g., ['IC', 'BIC', 'DGH']).
+            If provided, only these methods will be plotted.
+            If None, all methods present in `filtered_data` are displayed.
         legend_x (float):
             X position where the legend is anchored.
         legend_y (float):
@@ -468,6 +468,10 @@ def generate_boxplots_matplotlib(
         for method, df in methods_dict.items():
             values = df[variable].values
             plot_data.append((well_id, method, values))
+
+    # 1.5) Filter plot_data by methods_to_show if provided
+    if methods_to_show is not None:
+        plot_data = [item for item in plot_data if item[1] in methods_to_show]
 
     # 2) If an 'order' list is provided, filter and reorder 'plot_data' 
     #    based on the position of the well_id in 'order'

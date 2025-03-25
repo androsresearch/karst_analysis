@@ -127,11 +127,21 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
     --------
     pd.DataFrame
         A DataFrame with the following columns:
-         - ID: Base name of the well
-         - Method: Filtering method used (e.g. IC, BIC, DGH)
+         - id: Base name of the well
+         - method: Filtering method used (e.g. IC, BIC, DGH)
+         - fwl_thickness: The vertical position selected for the given method.
+         - mean: Mean value of the data
+         - std: Standard deviation
          - cv: Coefficient of Variation (std / mean)
+         - min: Minimum value
+         - max: Maximum value
+         - median: Median value
+         - 25%: 25th percentile
+         - 50%: 50th percentile (median)
+         - 75%: 75th percentile
          - iqr: Interquartile Range (75th percentile - 25th percentile)
-         - vp_selected: The vertical position selected for the given method.
+         - count: Total number of data points used
+         - outliers: Number of outliers detected
     """
 
     stats_list = []
@@ -154,7 +164,7 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
             if data_series.empty:
                 continue  # Skip if no data is present after filtering
 
-            # Compute statistics
+            # Compute basic statistics
             mean_val = data_series.mean()
             std_val = data_series.std()
             cv_val = std_val / mean_val if mean_val != 0 else float('nan')
@@ -165,6 +175,16 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
             percentile_50 = data_series.quantile(0.50)  # equivalent to median
             percentile_75 = data_series.quantile(0.75)
             iqr_val = percentile_75 - percentile_25
+
+            # Calcular el número total de datos
+            count_val = data_series.count()
+
+            # Definir los límites para considerar outliers
+            lower_bound = percentile_25 - 1.5 * iqr_val
+            upper_bound = percentile_75 + 1.5 * iqr_val
+
+            # Calcular el número de outliers
+            outliers_count = data_series[(data_series < lower_bound) | (data_series > upper_bound)].count()
 
             # Assign vertical position based on method
             if method == "DGH":
@@ -190,13 +210,16 @@ def compute_statistics(filtered_data: dict, file_info_df: pd.DataFrame, column: 
                 "25%": percentile_25,
                 "50%": percentile_50,
                 "75%": percentile_75,
-                "iqr": iqr_val
+                "iqr": iqr_val,
+                "count": count_val,
+                "outliers": outliers_count
             })
 
     # Convert the list to a DataFrame
     stats_df = pd.DataFrame(stats_list)
 
     return stats_df
+
 
 
 # =============================================================================

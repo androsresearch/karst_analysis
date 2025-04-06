@@ -265,3 +265,6 @@ data/
 
 # profiles_70_75_processor.ipynb
 # profiles_70_75_evaluation.ipynb
+
+.cursor/
+pruebas/

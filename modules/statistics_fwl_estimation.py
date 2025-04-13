@@ -53,7 +53,7 @@ def filter_well_data(well_data: pd.DataFrame, filter_value: float) -> pd.DataFra
 
 def load_and_filter_data(
     file_info_df: pd.DataFrame, 
-    subfolder: str
+    data_path: str
 ) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Load and filter data for each well based on the three filtering methods.
@@ -67,7 +67,7 @@ def load_and_filter_data(
         
     Args:
         file_info_df (pd.DataFrame): DataFrame with filtering points for each well.
-        subfolder (str): The subfolder name (e.g. 'rawdy', 'processed', or 'raw').
+        data_path (str): The complete path to the data file.
         
     Returns:
         Dict[str, Dict[str, pd.DataFrame]]: Nested dictionary where the first key is the well ID 
@@ -82,14 +82,12 @@ def load_and_filter_data(
         'DGH': 'vp_dgh',
         'LRST': 'vp_lrst'
     }
-
-    root = os.path.abspath('..')  
     
     for idx, row in file_info_df.iterrows():
         well_id = row['ID']
-        # Read data (simulate reading CSV based on the subfolder)
+        # Read data from the specified path
         try:
-            df = pd.read_csv(f"{root}/data/{subfolder}/{well_id}{get_file_suffix(subfolder)}")
+            df = pd.read_csv(f"{data_path}/{well_id}_rowdy.csv")
         except Exception as e:
             print(f"Error reading data for {well_id}: {e}")
             continue

@@ -8,6 +8,7 @@ data/raw_2025_with_issues
 data/ALL_YSI_2023_LRS6522_SEC_VERT.csv
 data/fwl_map/fwl_2023_TW_qgis.csv
 
+!data/stats_zones.csv
 
 
 
@@ -265,8 +266,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-
-
-
 .cursor/
 pruebas/
+scripts/

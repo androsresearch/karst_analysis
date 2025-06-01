@@ -1,7 +1,3 @@
-# Mapping the Freshwater–Saltwater Interface in Karst  
-**Linking Well Conductivity, ERT, and Satellite Observations in the Bahamas**
-
-
 Copyright (c) 2025 Andros Research
 
 All rights reserved.
@@ -10,6 +6,13 @@ This source code and associated documentation files are provided for viewing pur
 
 Unauthorized use, reproduction, or distribution of this code is strictly prohibited and may result in legal action.
 
+------------------------------------
+
+
+
+
+# Mapping the Freshwater–Saltwater Interface in Karst  
+**Linking Well Conductivity, ERT, and Satellite Observations in the Bahamas**
 
 ## Overview
 

@@ -1,10 +1,17 @@
-Copyright (c) 2025 Andros Research
+Copyright (c) 2025 University of Bristol
 
 All rights reserved.
 
-This source code and associated documentation files are provided for viewing purposes only. No permission is granted to use, copy, reproduce, modify, merge, publish, distribute, sublicense, or sell any part of this code or its derivatives without explicit prior written permission from Andros Research.
+This source code and associated documentation files are the exclusive intellectual property of the University of Bristol. The code is provided solely for internal purposes by authorized personnel.
 
-Unauthorized use, reproduction, or distribution of this code is strictly prohibited and may result in legal action.
+Unauthorized use, reproduction, modification, distribution, republication, display, or performance of this code, in whole or in part, is strictly prohibited without the express prior written permission of the University of Bristol.
+
+This code may not be used for commercial purposes, incorporated into other works, or otherwise exploited in any form, whether in original or modified form, without an appropriate license agreement.
+
+By accessing this repository, you agree not to copy, clone, fork, download, distribute, modify, or otherwise use the contents in any way, except with explicit, written authorization from the University of Bristol.
+
+Any violation of these terms may result in legal action.
+
 
 ------------------------------------
 

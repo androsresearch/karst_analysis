@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
+import plotly.graph_objects as go
+from scipy.interpolate import PchipInterpolator
 from typing import Optional, List, Tuple
 import os
 
@@ -225,3 +227,198 @@ def filter_csv_by_vertical_position(
             
         except Exception as e:
             print(f"[Error] An error occurred while processing file '{file_name}': {e}")
+
+
+def analize_dz(depths, well_name,
+               percentile=95):
+    """
+    Estimate the optimal sampling interval (dz) from a 1D depth array and produce a boxplot.
+
+    Parameters
+    ----------
+    depths : array-like (1D)
+        Depth measurements (in meters). Can be a pandas Series/DataFrame or numpy array.
+    percentile : int, optional
+        Percentile to use when estimating dz. Default is 95.
+    well_name : str, optional
+        Name of the well (for plot title). Default is "Well".
+
+    Returns
+    -------
+    stats_df : pd.DataFrame
+        Summary statistics for dz (percentile, median, mean, min, max, dz_max).
+    fig : plotly.graph_objects.Figure
+        Boxplot figure showing the distribution of Δz with metric lines.
+    """
+    # Coerce to 1D numpy array and drop NaNs
+    if isinstance(depths, pd.DataFrame):
+        depths = depths.iloc[:, 0]
+    arr = np.asarray(depths).ravel()
+    arr = arr[~np.isnan(arr)]
+
+    sorted_depths = np.sort(arr)
+    delta_z = np.diff(sorted_depths)
+
+    # Compute summary statistics
+    pval = np.percentile(delta_z, percentile)
+    median = np.median(delta_z)
+    mean = np.mean(delta_z)
+    mn = np.min(delta_z)
+    mx = np.max(delta_z)
+
+    stats_df = pd.DataFrame({
+        f'percentile{percentile}': [pval],
+        'median': [median],
+        'mean': [mean],
+        'min': [mn],
+        'max': [mx]
+    })
+
+    # Build boxplot
+    fig = go.Figure()
+    fig.add_trace(go.Box(
+        y=delta_z,
+        name='Δz',
+        boxpoints='outliers',
+        marker_color='rgb(8,81,156)',
+        line_color='rgb(8,81,156)'
+    ))
+
+    # Overlay horizontal lines for each metric
+    metrics = {
+        f'Percentile {percentile}': pval,
+        'Median': median,
+        'Mean': mean,
+        'Min': mn,
+        'Max': mx
+    }
+    colors = {
+        f'Percentile {percentile}': 'red',
+        'Median': 'green',
+        'Mean': 'yellow',
+        'Min': 'purple',
+        'Max': 'orange'
+    }
+    for label, value in metrics.items():
+        fig.add_hline(
+            y=value,
+            line_dash="dash",
+            line_color=colors[label],
+            annotation_text=f"{label}: {value:.3f} m",
+            annotation_position="right"
+        )
+
+    # Layout adjustments
+    fig.update_layout(
+        title=f'Distribution of sampling intervals (Δz): {well_name}',
+        yaxis_title='Δz (meters)',
+        showlegend=False,
+        template='plotly_white',
+        height=800,
+        width=700,
+        margin=dict(r=150)
+    )
+
+    return stats_df, fig
+
+def resample_profile(
+    df: pd.DataFrame,
+    depth_col: str = 'Vertical Position m',
+    ec_col: str = 'Corrected sp Cond [µS/cm]', 
+    dz: float = None,
+    dz_method: str = 'percentile95',
+    adaptive_refinement: bool = False,
+    sort_values: bool = False
+) -> pd.DataFrame:
+    """
+    Resample a depth vs conductivity profile:
+      1) Clean and optionally sort
+      2) Create uniform depth grid
+      3) Monotonic PCHIP interpolation
+      4) Optional adaptive refinement in high-gradient zones
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Original data with depth and conductivity columns.
+    depth_col : str
+        Name of the depth column (meters).
+    ec_col : str
+        Name of the conductivity column (µS/cm).
+    dz : float, optional
+        Desired grid spacing. If None, calculated automatically.
+    dz_method : str
+        Method to estimate dz if not provided: 'percentile95', 'median', 'mean', 'min'.
+    adaptive_refinement : bool
+        If True, add midpoints in regions with steep gradients.
+    sort_values : bool
+        If True, sort data by depth before processing.
+
+    Returns
+    -------
+    pandas.DataFrame or tuple
+        If adaptive_refinement is False: DataFrame with columns:
+          depth_col and ec_col sampled on uniform grid.
+        If adaptive_refinement is True: tuple of:
+          - full resampled DataFrame
+          - DataFrame of added points (depth and conductivity)
+    """
+    # 1. Clean and sort
+    data = df[[depth_col, ec_col]].dropna()
+    if sort_values:
+        data = data.sort_values(depth_col)
+
+    depths = data[depth_col].values
+    ecs = data[ec_col].values
+
+    # 2. Determine dz_target
+    if dz is None:
+        dz_target = analize_dz(depths, percentile=95)[0]
+        dz_target = float(dz_target[dz_method])
+    else:
+        dz_target = dz
+
+    # 3. Build uniform depth grid including endpoints
+    z_min, z_max = depths[0], depths[-1]
+    uniform_grid = np.arange(z_min, z_max, dz_target)
+    # Ensure z_max included
+    if uniform_grid[-1] < z_max - 1e-10:
+        uniform_grid = np.append(uniform_grid, z_max)
+
+    # 4. PCHIP interpolation
+    interpolator = PchipInterpolator(depths, ecs)
+    ec_uniform = interpolator(uniform_grid)
+
+    # 5. Adaptive refinement
+    added_points = None
+    if adaptive_refinement:
+        # Compute absolute gradient
+        grad = np.abs(np.gradient(ec_uniform, uniform_grid))
+        threshold = 3 * np.median(grad)
+        # Find indices where gradient exceeds threshold (excluding last index)
+        high_grad_idx = np.where(grad > threshold)[0]
+        # Only consider those with a next neighbor
+        valid = high_grad_idx[high_grad_idx < len(uniform_grid) - 1]
+        if valid.size > 0:
+            # Compute midpoints
+            mids = (uniform_grid[valid] + uniform_grid[valid + 1]) / 2.0
+            # Unique and sorted
+            mids = np.unique(mids)
+            # Evaluate at mids
+            ec_mids = interpolator(mids)
+            # Merge grids
+            final_grid = np.sort(np.concatenate([uniform_grid, mids]))
+            ec_final = interpolator(final_grid)
+            added_points = pd.DataFrame({depth_col: mids, ec_col: ec_mids})
+        else:
+            final_grid, ec_final = uniform_grid, ec_uniform
+    else:
+        final_grid, ec_final = uniform_grid, ec_uniform
+
+    # 6. Package full result
+    full_df = pd.DataFrame({depth_col: final_grid, ec_col: ec_final})
+
+    if adaptive_refinement:
+        return full_df, added_points
+    
+    return full_df

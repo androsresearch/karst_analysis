@@ -331,7 +331,7 @@ def adjust_vertical_position(df: pd.DataFrame,
         Value to add to vertical positions.
     method : str, default 'TOM'
         Adjustment method:
-        - 'TOM': Add adjustment only to values >= 0.01 m, leave values <= 0.00 m unchanged
+        - 'TOM': Add adjustment only to values >= 0.001 m, leave values <= 0.00 m unchanged
         - 'YSI': Add adjustment to all values
     column_mappings : Dict[str, List[str]], optional
         Custom column name mappings.
@@ -363,8 +363,8 @@ def adjust_vertical_position(df: pd.DataFrame,
     result_df = df.copy()
     
     if method == 'TOM':
-        # TOM method: only adjust values >= 0.01 m
-        mask = result_df[depth_col] >= 0.01
+        # TOM method: only adjust values >= 0.001 m
+        mask = result_df[depth_col] >= 0.001
         adjusted_count = mask.sum()
         unchanged_count = (~mask).sum()
         

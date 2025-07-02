@@ -11,8 +11,6 @@ DEFAULT_COLUMN_MAPPINGS = {
         'Vertical Position [m]',
         'Vertical Position m',
         'VP',
-        'Depth',
-        'depth',
         'z',
         'Z'
     ],
@@ -20,6 +18,7 @@ DEFAULT_COLUMN_MAPPINGS = {
         'Corrected sp Cond [uS/cm]',
         'Corrected sp Cond [µS/cm]',
         'SpCond_muS/cm',
+        'SpCond µS/cm',
         'SEC',
         'Conductivity',
         'conductivity',
@@ -313,10 +312,85 @@ def apply_savgol_filter_to_df(df: pd.DataFrame,
     return result_df
 
 
+def adjust_vertical_position(df: pd.DataFrame,
+                           depth_col: Optional[str] = None,
+                           adjustment: float = 0.272,
+                           method: str = 'TOM',
+                           column_mappings: Optional[Dict[str, List[str]]] = None,
+                           logger: Optional[logging.Logger] = None) -> pd.DataFrame:
+    """
+    Adjust vertical position values by adding an offset.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with depth column.
+    depth_col : str, optional
+        Name of the depth column. If None, will be auto-detected.
+    adjustment : float, default 0.272
+        Value to add to vertical positions.
+    method : str, default 'TOM'
+        Adjustment method:
+        - 'TOM': Add adjustment only to values >= 0.01 m, leave values <= 0.00 m unchanged
+        - 'YSI': Add adjustment to all values
+    column_mappings : Dict[str, List[str]], optional
+        Custom column name mappings.
+    logger : logging.Logger, optional
+        Logger for output messages.
+        
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with adjusted vertical positions.
+        
+    Raises
+    ------
+    ValueError
+        If depth column cannot be found or method is invalid.
+    """
+    # Auto-detect column if not specified
+    if depth_col is None:
+        depth_col = find_column_name(df, 'depth', column_mappings)
+        if depth_col is None:
+            raise ValueError("Could not find depth column in DataFrame")
+    
+    # Validate method
+    valid_methods = ['TOM', 'YSI']
+    if method not in valid_methods:
+        raise ValueError(f"Invalid method '{method}'. Must be one of {valid_methods}")
+    
+    # Make a copy to avoid modifying original
+    result_df = df.copy()
+    
+    if method == 'TOM':
+        # TOM method: only adjust values >= 0.01 m
+        mask = result_df[depth_col] >= 0.01
+        adjusted_count = mask.sum()
+        unchanged_count = (~mask).sum()
+        
+        result_df.loc[mask, depth_col] = result_df.loc[mask, depth_col] + adjustment
+        
+        if logger:
+            logger.info(f"Applied TOM adjustment (+{adjustment} m): "
+                       f"{adjusted_count} values adjusted, {unchanged_count} values unchanged")
+    
+    elif method == 'YSI':
+        # YSI method: adjust all values
+        result_df[depth_col] = result_df[depth_col] + adjustment
+        
+        if logger:
+            logger.info(f"Applied YSI adjustment (+{adjustment} m) to all {len(result_df)} values")
+    
+    return result_df
+
+
 def process_borehole_data(df: pd.DataFrame,
                          apply_savgol: bool = False,
                          savgol_window: int = 11,
                          savgol_order: int = 3,
+                         apply_depth_adjustment: bool = False,
+                         depth_adjustment: float = 0.272,
+                         depth_adjustment_method: str = 'TOM',
                          dz: Optional[float] = None,
                          dz_method: str = 'percentile95',
                          column_mappings: Optional[Dict[str, List[str]]] = None,
@@ -334,6 +408,12 @@ def process_borehole_data(df: pd.DataFrame,
         Window length for Savitzky-Golay filter.
     savgol_order : int
         Polynomial order for Savitzky-Golay filter.
+    apply_depth_adjustment : bool
+        Whether to apply depth adjustment.
+    depth_adjustment : float
+        Value to add to depth positions.
+    depth_adjustment_method : str
+        Method for depth adjustment ('TOM' or 'YSI').
     dz : float, optional
         Target spacing for resampling.
     dz_method : str
@@ -354,22 +434,34 @@ def process_borehole_data(df: pd.DataFrame,
         'negative_removed': 0,
         'duplicates_found': 0,
         'final_rows': 0,
-        'savgol_applied': False
+        'savgol_applied': False,
+        'depth_adjustment_applied': False,
+        'depth_adjustment_method': None
     }
     
-    # Step 1: Remove negative depths
+    # Step 1: Apply depth adjustment (if requested) - before filtering negatives
+    if apply_depth_adjustment:
+        df = adjust_vertical_position(df, 
+                                    adjustment=depth_adjustment,
+                                    method=depth_adjustment_method,
+                                    column_mappings=column_mappings, 
+                                    logger=logger)
+        stats['depth_adjustment_applied'] = True
+        stats['depth_adjustment_method'] = depth_adjustment_method
+    
+    # Step 2: Remove negative depths
     df_filtered = filter_non_negative_values(df, column_mappings=column_mappings, logger=logger)
     stats['negative_removed'] = stats['original_rows'] - len(df_filtered)
     
-    # Step 2: Average duplicate depths
+    # Step 3: Average duplicate depths
     df_averaged, duplicates = average_grouped_by_depth(df_filtered, column_mappings=column_mappings, logger=logger)
     stats['duplicates_found'] = len(duplicates)
     
-    # Step 3: Resample to uniform spacing
+    # Step 4: Resample to uniform spacing
     df_resampled = resample_profile_uniform(df_averaged, dz=dz, dz_method=dz_method, 
                                            column_mappings=column_mappings, logger=logger)
     
-    # Step 4: Apply Savitzky-Golay filter (optional)
+    # Step 5: Apply Savitzky-Golay filter (optional)
     if apply_savgol:
         df_final = apply_savgol_filter_to_df(df_resampled, window_length=savgol_window, 
                                             poly_order=savgol_order, 

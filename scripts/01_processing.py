@@ -18,6 +18,7 @@ try:
     
     process_borehole_data = processing_module.process_borehole_data
     DEFAULT_COLUMN_MAPPINGS = processing_module.DEFAULT_COLUMN_MAPPINGS
+    adjust_vertical_position = processing_module.adjust_vertical_position
     
 except ImportError as e:
     print(f"Error importing processing module: {e}")
@@ -121,6 +122,11 @@ def get_user_input() -> Tuple[Path, Path, bool, Dict]:
     else:
         print(f"✓ Using existing output folder: '{output_folder}'")
     
+    # Depth adjustment
+    print("\n" + "-"*40)
+    apply_depth_adj = input("Apply depth adjustment? (y/n) [default: n]: ").strip().lower()
+    apply_depth_adj = apply_depth_adj == 'y'
+    
     # Savitzky-Golay filter
     print("\n" + "-"*40)
     apply_savgol = input("Apply Savitzky-Golay smoothing filter? (y/n) [default: n]: ").strip().lower()
@@ -128,11 +134,35 @@ def get_user_input() -> Tuple[Path, Path, bool, Dict]:
     
     # Processing parameters
     params = {
+        'apply_depth_adjustment': apply_depth_adj,
+        'depth_adjustment': 0.272,
+        'depth_adjustment_method': 'TOM',
         'apply_savgol': apply_savgol,
         'savgol_window': 11,
         'savgol_order': 3,
         'dz_method': 'percentile95'
     }
+    
+    if apply_depth_adj:
+        print("\nDepth adjustment parameters:")
+        
+        # Adjustment value
+        adjustment_input = input("  Adjustment value (m) [default: 0.272]: ").strip()
+        if adjustment_input:
+            try:
+                params['depth_adjustment'] = float(adjustment_input)
+            except ValueError:
+                print("  → Using default: 0.272")
+        
+        # Method
+        method_input = input("  Method (TOM/YSI) [default: TOM]: ").strip().upper()
+        if method_input in ['TOM', 'YSI']:
+            params['depth_adjustment_method'] = method_input
+        elif method_input:
+            print("  → Invalid method, using default: TOM")
+        
+        print(f"  → TOM method: Add adjustment only to values ≥ 0.01 m")
+        print(f"  → YSI method: Add adjustment to all values")
     
     if apply_savgol:
         print("\nSavitzky-Golay filter parameters:")
@@ -203,6 +233,9 @@ def process_single_file(input_file: Path,
         # Process data
         df_processed, stats = process_borehole_data(
             df,
+            apply_depth_adjustment=params['apply_depth_adjustment'],
+            depth_adjustment=params['depth_adjustment'],
+            depth_adjustment_method=params['depth_adjustment_method'],
             apply_savgol=params['apply_savgol'],
             savgol_window=params['savgol_window'],
             savgol_order=params['savgol_order'],
@@ -269,6 +302,12 @@ def print_summary(results: List[Dict], processing_time: float):
         print(f"Negative values removed: {total_removed:,}")
         print(f"Duplicate depths found: {total_duplicates:,}")
         
+        # Depth adjustment statistics
+        depth_adj_applied = any(r['stats'].get('depth_adjustment_applied', False) for r in successful)
+        if depth_adj_applied:
+            adj_method = successful[0]['stats'].get('depth_adjustment_method', 'Unknown')
+            print(f"Depth adjustment applied: {adj_method} method")
+        
         reduction_pct = (1 - total_final / total_original) * 100
         print(f"Data reduction: {reduction_pct:.1f}%")
     
@@ -297,6 +336,11 @@ def main():
         logger.info(f"Starting processing of {len(csv_files)} files...")
         logger.info(f"Input folder: {input_folder}")
         logger.info(f"Output folder: {output_folder}")
+        
+        if params['apply_depth_adjustment']:
+            logger.info(f"Depth adjustment: ON ({params['depth_adjustment_method']} method, +{params['depth_adjustment']} m)")
+        else:
+            logger.info("Depth adjustment: OFF")
         
         if apply_savgol:
             logger.info(f"Savitzky-Golay filter: ON (window={params['savgol_window']}, order={params['savgol_order']})")

@@ -391,7 +391,7 @@ def process_borehole_data(df: pd.DataFrame,
                          apply_depth_adjustment: bool = False,
                          depth_adjustment: float = 0.272,
                          depth_adjustment_method: str = 'TOM',
-                         dz: Optional[float] = None,
+                         dz: Optional[float] = 0.01,
                          dz_method: str = 'percentile95',
                          column_mappings: Optional[Dict[str, List[str]]] = None,
                          logger: Optional[logging.Logger] = None) -> Tuple[pd.DataFrame, Dict]:

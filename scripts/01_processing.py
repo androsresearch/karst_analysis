@@ -12,7 +12,7 @@ import warnings
 # Import processing functions from modules
 try:
     import importlib.util
-    spec = importlib.util.spec_from_file_location("processing_module", "modules/01_processing.py")
+    spec = importlib.util.spec_from_file_location("processing_module", "modules/processing.py")
     processing_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(processing_module)
     
@@ -22,7 +22,7 @@ try:
     
 except ImportError as e:
     print(f"Error importing processing module: {e}")
-    print("Please ensure modules/01_processing.py exists and is accessible.")
+    print("Please ensure modules/processing.py exists and is accessible.")
     sys.exit(1)
 
 # Suppress pandas warnings for cleaner output

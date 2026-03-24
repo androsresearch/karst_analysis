@@ -12,9 +12,12 @@ data/fwl_map/fwl_2023_TW_qgis.csv
 
 
 
-### Data ###
-notebooks/processor_mg.ipynb
-notebooks/evaluation_mg.ipynb
+### Results ###
+
+results/html_breakpoints
+results/html_time
+results/images
+
 
 ### Linux ###
 *~

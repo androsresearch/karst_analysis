@@ -1,0 +1,2 @@
+ID,breakpoint_1 (sec),breakpoint_2 (sec),breakpoint_1 (vp),breakpoint_2 (vp),confidence_interval_1 (sec),confidence_interval_2 (sec),confidence_interval_1 (vp),confidence_interval_2 (vp)
+LRS70_D_YSI_20220131_secuniform,7910.315684442108,52559.57962617004,8.941465464632019,12.863479547439296,"(np.float64(7568.180773236369), np.float64(8252.450595647848))","(np.float64(52467.718945229666), np.float64(52651.44030711041))","(np.float64(8.434229469536792), np.float64(8.99554642767813))","(np.float64(12.857569801074582), np.float64(13.291502895042262))"

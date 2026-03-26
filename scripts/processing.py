@@ -132,6 +132,11 @@ def get_user_input() -> Tuple[Path, Path, bool, Dict]:
     apply_savgol = input("Apply Savitzky-Golay smoothing filter? (y/n) [default: n]: ").strip().lower()
     apply_savgol = apply_savgol == 'y'
     
+    # Log10 transformation
+    print("\n" + "-"*40)
+    apply_log10 = input("Apply log10 transformation to conductivity? (y/n) [default: y]: ").strip().lower()
+    apply_log10 = apply_log10 != 'n'
+
     # Processing parameters
     params = {
         'apply_depth_adjustment': apply_depth_adj,
@@ -140,6 +145,7 @@ def get_user_input() -> Tuple[Path, Path, bool, Dict]:
         'apply_savgol': apply_savgol,
         'savgol_window': 11,
         'savgol_order': 3,
+        'apply_log10': apply_log10,
         'dz_method': 'percentile95'
     }
     
@@ -239,6 +245,7 @@ def process_single_file(input_file: Path,
             apply_savgol=params['apply_savgol'],
             savgol_window=params['savgol_window'],
             savgol_order=params['savgol_order'],
+            apply_log10=params['apply_log10'],
             dz_method=params['dz_method'],
             logger=file_logger
         )
@@ -307,6 +314,11 @@ def print_summary(results: List[Dict], processing_time: float):
         if depth_adj_applied:
             adj_method = successful[0]['stats'].get('depth_adjustment_method', 'Unknown')
             print(f"Depth adjustment applied: {adj_method} method")
+
+        # Log10 transformation
+        log10_applied = any(r['stats'].get('log10_applied', False) for r in successful)
+        if log10_applied:
+            print("Log10 transformation: applied")
         
         reduction_pct = (1 - total_final / total_original) * 100
         print(f"Data reduction: {reduction_pct:.1f}%")
@@ -346,6 +358,11 @@ def main():
             logger.info(f"Savitzky-Golay filter: ON (window={params['savgol_window']}, order={params['savgol_order']})")
         else:
             logger.info("Savitzky-Golay filter: OFF")
+
+        if params['apply_log10']:
+            logger.info("Log10 transformation: ON")
+        else:
+            logger.info("Log10 transformation: OFF")
         
         # Process files with progress bar
         results = []

@@ -461,6 +461,56 @@ def apply_savgol_filter_to_df(df: pd.DataFrame,
     return result_df
 
 
+def apply_log10_conductivity(df: pd.DataFrame,
+                              value_col: Optional[str] = None,
+                              column_mappings: Optional[Dict[str, List[str]]] = None,
+                              logger: Optional[logging.Logger] = None) -> pd.DataFrame:
+    """
+    Add a column with log10-transformed conductivity values.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame with conductivity column.
+    value_col : str, optional
+        Name of the conductivity column. If None, will be auto-detected.
+    column_mappings : Dict[str, List[str]], optional
+        Custom column name mappings.
+    logger : logging.Logger, optional
+        Logger for output messages.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with an additional log10-transformed column.
+    """
+    if value_col is None:
+        value_col = find_column_name(df, 'conductivity', column_mappings)
+        if value_col is None:
+            raise ValueError("Could not find conductivity column in DataFrame")
+
+    result_df = df.copy()
+    log_col = f"log10_{value_col}"
+
+    values = result_df[value_col].values.astype(float)
+    non_positive_mask = values <= 0
+    non_positive_count = non_positive_mask.sum()
+
+    if non_positive_count > 0 and logger:
+        logger.warning(f"{non_positive_count} non-positive conductivity values replaced with NaN in log10 column")
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        log_values = np.log10(values)
+    log_values[non_positive_mask] = np.nan
+
+    result_df[log_col] = log_values
+
+    if logger:
+        logger.info(f"Added log10 transformation column: '{log_col}'")
+
+    return result_df
+
+
 def adjust_vertical_position(df: pd.DataFrame,
                            depth_col: Optional[str] = None,
                            adjustment: float = 0.272,
@@ -543,6 +593,7 @@ def process_borehole_data(df: pd.DataFrame,
                          depth_adjustment_method: str = 'TOM',
                          apply_monotonic_filter: bool = True,
                          monotonic_tolerance: float = 0.002,
+                         apply_log10: bool = True,
                          dz: Optional[float] = None,
                          dz_method: str = 'percentile95',
                          column_mappings: Optional[Dict[str, List[str]]] = None,
@@ -599,6 +650,7 @@ def process_borehole_data(df: pd.DataFrame,
         'monotonic_filter_applied': False,
         'monotonic_removed': 0,
         'monotonic_removal_pct': 0.0,
+        'log10_applied': False,
     }
     
     # Step 1: Ensure chronological order
@@ -648,6 +700,11 @@ def process_borehole_data(df: pd.DataFrame,
     else:
         df_final = df_resampled
     
+    # Step 8: Apply log10 transformation (optional)
+    if apply_log10:
+        df_final = apply_log10_conductivity(df_final, column_mappings=column_mappings, logger=logger)
+        stats['log10_applied'] = True
+
     stats['final_rows'] = len(df_final)
-    
+
     return df_final, stats

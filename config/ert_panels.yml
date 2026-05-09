@@ -1,0 +1,30 @@
+# config/ert_panels.yml
+# ERT decisions for SEC-vs-ERT comparison panels.
+#
+# This file is INTENTIONALLY campaign-independent: ERT data is
+# pre-casing (no campaign concept). Which campaign of SEC to compare
+# against is decided at the command line:
+#
+#     uv run python scripts/sec_vs_ert_panels_batch.py --campaign 2022_02
+#
+# The same ert_panels.yml drives all campaigns.
+
+# Default ERT post-processing variant for figure rendering.
+# When you settle on a single canonical variant for the thesis, this
+# is the one place to change. Per-(well, transect, x) overrides can
+# be added later by extending data/metadata/ert_wells.csv with a
+# `variant` column (loader supports it).
+default_variant: "viz_sharp"
+
+# Wells to include in the SEC-vs-ERT comparison panels.
+# - Empty list or omitted key  =>  use ALL wells present in
+#                                  data/metadata/ert_wells.csv.
+# - For a well listed here, the script reads its (transect, x)
+#   associations from ert_wells.csv. A well with three associations
+#   produces three figures (x2 scales).
+wells:
+  - LRS70D
+  # - LRS69D
+  # - BW3D
+  # - AW5D
+  # - AW6D

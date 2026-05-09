@@ -1,0 +1,5 @@
+# Sensitivity test: SavGol window = 21
+# All other parameters fall back to pipeline_default.yml.
+preprocessing:
+  savgol:
+    window: 21

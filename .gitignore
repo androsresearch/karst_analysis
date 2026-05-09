@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.uv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# ────────────────────────────────────────────────────────────────────
+# Project — what NOT to track
+# ────────────────────────────────────────────────────────────────────
+
+# Raw field data — too large for Git (~58 MB and growing per campaign).
+# Distributed via Zenodo as part of the thesis dataset deposit.
+data/raw/
+
+# Figures — regenerable from scripts. Heavy (~140 MB).
+results/figures/
+
+# Installer backups (created by install_v*.ps1)
+backups/
+
+# Ad-hoc artefacts that should not enter the repo
+*.zip
+repo_inventory.txt
+repo_inventory_code.txt
+
+# Throwaway scripts kept locally (if any)
+throwaways/
+scratch/
+
+# ────────────────────────────────────────────────────────────────────
+# Project — what TO keep (whitelist overrides for clarity)
+# ────────────────────────────────────────────────────────────────────
+
+# Mapping tables and config-like CSVs at the metadata level
+!data/metadata/
+
+# Processed / derived data — small, scientifically meaningful, results
+# of decisions encoded in config/ that future readers want to inspect.
+!data/processed/
+!data/slopes/
+!data/breakpoints/
+
+# Run ledger and method-choice manifests
+!results/runs.csv
+!results/chosen_method.csv
+
+# Non-figure result tables (per-technique CSVs, convergence outputs)
+!results/sec_robustness/
+!results/convergence/
+!results/sensitivity_savgol_window/
+
+# Sensitivity sweep — exploratory, has PNGs and stage dirs
+results/savgol_window_sensitivity/

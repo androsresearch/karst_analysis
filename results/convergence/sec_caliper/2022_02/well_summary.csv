@@ -1,0 +1,6 @@
+well_id,n_clusters_analyzed,n_converging,fraction_converging,n_with_severe_match,n_with_moderate_match,n_with_mild_match,max_convergence_score,mean_convergence_score_converging
+AW5D,4.0,3.0,0.75,0.0,0.0,3.0,5.0,4.666666666666667
+AW6D,3.0,3.0,1.0,0.0,1.0,2.0,18.0,11.0
+BW3D,5.0,4.0,0.8,1.0,0.0,3.0,21.0,9.5
+LRS69D,6.0,2.0,0.3333333333333333,0.0,0.0,2.0,6.0,5.0
+LRS70D,5.0,3.0,0.6,1.0,0.0,2.0,15.0,10.666666666666666

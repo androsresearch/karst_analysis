@@ -1,0 +1,47 @@
+{
+  "AW5O": {
+    "well_interval": [
+      1.0,
+      5.0
+    ],
+    "n": 132,
+    "median_dz_m": 0.030391607999999737,
+    "detrend_window_m": 0.3,
+    "detrend_window_pts": 11,
+    "cal_mean_cm": 10.621450718834897,
+    "cal_std_cm": 0.19907772852918795,
+    "sigma_std_cm": 0.1541367330612641,
+    "sigma_MAD_cm": 0.08814876872478779,
+    "residual_mean_cm": -0.0004269164177650509,
+    "lag1_autocorr": 0.37215436868360774,
+    "well": "AW5O",
+    "auger_in": 4.0,
+    "auger_cm": 10.16,
+    "drilling_method": "sonic_coring"
+  },
+  "AW5D": {
+    "well_interval": [
+      15.0,
+      20.0
+    ],
+    "n": 165,
+    "median_dz_m": 0.030388559999998677,
+    "detrend_window_m": 0.3,
+    "detrend_window_pts": 11,
+    "cal_mean_cm": 16.503599084999284,
+    "cal_std_cm": 0.26472064426802283,
+    "sigma_std_cm": 0.18305761284934485,
+    "sigma_MAD_cm": 0.18239132271569686,
+    "residual_mean_cm": -0.002019651632753685,
+    "lag1_autocorr": 0.3153440541360086,
+    "well": "AW5D",
+    "auger_in": 6.0,
+    "auger_cm": 15.24,
+    "drilling_method": "rotary_auger"
+  },
+  "comparison": {
+    "sigma_drilling_from_std_cm": 0.09875199817371413,
+    "sigma_drilling_from_MAD_cm": 0.15967588789258494,
+    "interpretation": "AW5O sigma is dominated by caliper transducer noise (smooth sonic-cored hole). AW5D sigma is the quadrature sum of transducer noise and rotary-auger drilling roughness."
+  }
+}

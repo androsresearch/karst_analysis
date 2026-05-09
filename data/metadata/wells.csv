@@ -1,0 +1,6 @@
+site,well_type,campaign,vadose_thickness_m,reference_date,source,notes
+AW5,D,2022_02,0.64,2022-02-13,extracted from Depth from GL (m),
+AW6,D,2022_02,1.265,2022-02-19,extracted from Depth from GL (m),
+BW3,D,2022_02,3.28,2022-02-02,extracted from Depth from GL (m),
+LRS69,D,2022_02,1.97,2022-02-12,extracted from Depth from GL (m),
+LRS70,D,2022_02,0.83,2022-01-31,extracted from Depth from GL (m),

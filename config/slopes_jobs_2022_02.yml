@@ -1,0 +1,44 @@
+# Example slopes jobs file.
+#
+# Edit this list to specify exactly which (well, method, trial, N)
+# combinations to process. After inspecting the breakpoint figures
+# under results/figures/breakpoints_trial_inspection/, you decide
+# the right configuration per case.
+#
+# Run with:
+#   uv run python scripts/slopes_batch.py --jobs config/slopes_jobs_2022_02.yml
+
+campaign: "2022_02"
+
+jobs:
+  # Replace these examples with your actual choices after inspecting
+  # the trial figures.
+  - well: LRS70D
+    method: lowess
+    trial: trial_3
+    n: 15
+    bot_mz_sec_threshold: 40000 
+
+  - well: AW5D
+    method: savgol
+    trial: trial_3
+    n: 15
+    bot_mz_sec_threshold: 40000
+
+  - well: AW6D
+    method: lowess
+    trial: trial_1
+    n: 15
+    bot_mz_sec_threshold: 40000
+  
+  - well: LRS69D
+    method: lowess
+    trial: trial_2
+    n: 15
+    bot_mz_sec_threshold: 40000
+
+  - well: BW3D
+    method: lowess
+    trial: trial_3
+    n: 15
+    bot_mz_sec_threshold: 40000

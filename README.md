@@ -1,4 +1,4 @@
-# karst_analysis
+uv# karst_analysis
 
 Multi-method analysis of a coastal karst aquifer system at Andros, Bahamas.
 
@@ -8,7 +8,7 @@ several complementary techniques. The central scientific contribution
 is the **convergence** of these methods: identifying subsurface features
 where multiple independent measurements agree.
 
-Repository state: **v17.1**, 290 tests passing.
+Repository state: **v17.2**, 290 tests passing.
 
 ## Sub-packages
 
@@ -107,8 +107,14 @@ uv run python scripts\sec_robustness_analysis.py --campaign 2022_02
 # Caliper × video × Ardaman (pre-casing, no campaign):
 uv run python scripts\caliper_video_panels.py
 
-# SEC × caliper × video (one campaign):
-uv run python scripts\sec_caliper_video_panels.py --campaign 2022_02
+# SEC × caliper × video — preferred jobs-driven mode (v17.2):
+#   - one panel per job in the YAML, honouring per-well trial/method/N
+#   - BPs flagged TOP MZ / BOT MZ are coloured (red / purple) when the
+#     matching slopes CSV exists; otherwise plain orange + warning
+uv run python scripts\sec_caliper_video_panels.py --jobs config\slopes_jobs_2022_02.yml
+
+# SEC × caliper × video — legacy grid mode (sensitivity sweep):
+uv run python scripts\sec_caliper_video_panels.py --campaign 2022_02 --trial trial_1
 
 # SEC × caliper panel by WELL, multi-campaign overlay (v11):
 uv run python scripts\sec_caliper_panels.py --campaigns 2022_02
@@ -272,6 +278,11 @@ when the data is in place. The 1 xfailed test
 (`test_tie_warning` in `test_ert_mixing_zone.py`) is intentional —
 it documents a known issue inherited from SEC's mixing-zone tie
 detection, tracked in `NOTES_open_questions.md` (entry #7).
+
+The v17.2 changes (jobs-driven SEC × caliper × video panels with
+mixing-zone–coloured breakpoints) are non-breaking for existing tests
+— the legacy grid mode keeps working with all original defaults. See
+`CHANGELOG.md` for the full description.
 
 ## License
 

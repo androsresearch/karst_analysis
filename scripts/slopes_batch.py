@@ -43,7 +43,6 @@ import logging
 import re
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -56,6 +55,11 @@ from karst_analysis.sec.breakpoints import (
     rebuild_model,
 )
 from karst_analysis.sec.io import load_ysi_csv
+from karst_analysis.sec.jobs_io import (
+    Job,
+    load_jobs_file as _load_jobs_file,
+    trial_index as _trial_index,
+)
 from karst_analysis.sec.slopes import compute_slopes
 from karst_analysis.sec.viz import plot_slopes_overlay
 
@@ -69,102 +73,12 @@ logger = logging.getLogger("slopes_batch")
 
 
 # ─────────────────────────────────────────────────────────────────────────
-@dataclass
-class Job:
-    """One unit of work: process this exact (well, method, trial, n)."""
-    well: str
-    method: str
-    trial: str
-    n: int
-    bot_mz_sec_threshold: Optional[float] = None  # None → use script default
-
-
 def _parse_well_id(well_id: str) -> tuple[str, str]:
+    """Split ``"LRS70D"`` → ``("LRS70", "D")``."""
     m = re.match(r"^(.+?)([DSO])$", well_id)
     if m is None:
         raise ValueError(f"Cannot split well_id '{well_id}'")
     return m.group(1), m.group(2)
-
-
-def _trial_index(trial_name: str) -> int:
-    m = re.search(r"(\d+)$", trial_name)
-    return int(m.group(1)) if m else 1
-
-
-def _normalise_campaign(value) -> str:
-    """Coerce a campaign value to canonical 'YYYY_MM' string.
-
-    PyYAML interprets unquoted '2022_02' as the integer 202202 (Python
-    allows underscores as digit separators). To stay backwards-friendly
-    we accept both: if we receive a 6-digit int, we reformat it as
-    'YYYY_MM' and warn the user. Strings pass through verbatim.
-    """
-    if isinstance(value, int):
-        s = str(value)
-        if len(s) == 6 and s[:4].isdigit() and s[4:].isdigit():
-            recovered = f"{s[:4]}_{s[4:]}"
-            logger.warning(
-                f"campaign was parsed as integer {value} (the YAML value "
-                f"likely lacked quotes). Reconstructed as '{recovered}'. "
-                f"Consider quoting it in the YAML: campaign: \"{recovered}\""
-            )
-            return recovered
-        return s
-    if isinstance(value, str):
-        return value
-    raise ValueError(
-        f"campaign must be a string (e.g. '2022_02'); got {type(value).__name__}: {value!r}"
-    )
-
-
-def _load_jobs_file(path: Path) -> tuple[str, Optional[float], list[Job]]:
-    """Parse a YAML jobs file.
-
-    Returns
-    -------
-    (campaign, default_threshold, jobs)
-        - campaign: canonical 'YYYY_MM' string
-        - default_threshold: optional global default for
-          bot_mz_sec_threshold; None if not specified at YAML root.
-        - jobs: list of Job dataclasses; per-job threshold is on
-          ``bot_mz_sec_threshold`` if specified, else None.
-    """
-    with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-    if not isinstance(cfg, dict):
-        raise ValueError(f"{path} must be a YAML mapping with 'campaign' and 'jobs'.")
-    raw_campaign = cfg.get("campaign")
-    if raw_campaign is None:
-        raise ValueError(f"{path}: missing 'campaign' key.")
-    campaign = _normalise_campaign(raw_campaign)
-
-    default_threshold = cfg.get("bot_mz_sec_threshold")
-    if default_threshold is not None:
-        default_threshold = float(default_threshold)
-
-    jobs_raw = cfg.get("jobs", [])
-    if not jobs_raw:
-        raise ValueError(f"{path}: 'jobs' list is empty.")
-    jobs: list[Job] = []
-    for i, j in enumerate(jobs_raw, start=1):
-        for k in ("well", "method", "trial", "n"):
-            if k not in j:
-                raise ValueError(f"{path} job #{i}: missing key '{k}'.")
-        if j["method"] not in ("savgol", "lowess"):
-            raise ValueError(
-                f"{path} job #{i}: method must be 'savgol' or 'lowess'."
-            )
-        per_job_threshold = j.get("bot_mz_sec_threshold")
-        if per_job_threshold is not None:
-            per_job_threshold = float(per_job_threshold)
-        jobs.append(Job(
-            well=str(j["well"]),
-            method=str(j["method"]),
-            trial=str(j["trial"]),
-            n=int(j["n"]),
-            bot_mz_sec_threshold=per_job_threshold,
-        ))
-    return campaign, default_threshold, jobs
 
 
 def _find_raw_csv(raw_dir: Path, well: str, date: str) -> Optional[Path]:

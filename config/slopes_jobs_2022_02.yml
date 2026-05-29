@@ -33,12 +33,12 @@ jobs:
   
   - well: LRS69D
     method: lowess
-    trial: trial_2
+    trial: trial_3
     n: 15
     bot_mz_sec_threshold: 40000
 
   - well: BW3D
     method: lowess
-    trial: trial_3
+    trial: trial_2
     n: 15
     bot_mz_sec_threshold: 40000

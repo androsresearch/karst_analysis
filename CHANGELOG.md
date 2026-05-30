@@ -145,11 +145,12 @@ For BW3D the offset is 3.28 m, large enough to materially misalign
 breakpoints with the caliper anomalies and video-log features they
 were supposedly converging onto.
 
-BGL is the canonical datum for `karst_analysis`, because every
-cross-technique anchor — ground-level elevation, caliper trace zero,
-video-log observations, Ardaman lithology, future ERT 2D — lives in
-BGL. Cross-technique convergence requires a single datum and that
-datum has to be the one the physical anchors use.
+BGL is the canonical datum for `karst_analysis` (now documented in
+`working_style.md`) because every cross-technique anchor —
+ground-level elevation, caliper trace zero, video-log observations,
+Ardaman lithology, future ERT 2D — lives in BGL. Cross-technique
+convergence requires a single datum and that datum has to be the one
+the physical anchors use.
 
 The SEC CSVs themselves (`data/processed/sec/`, `data/breakpoints/`,
 `data/slopes/`) stay in water-table datum — they are the model's
@@ -209,6 +210,7 @@ LRS70D BPs in BGL (LOWESS, N=15, trial 3) will be at: 1.92, 3.16,
 * `scripts/preprocess_batch.py` — passes `vadose_offset_m`.
 * `scripts/regenerate_breakpoint_figures.py` — passes `vadose_offset_m`.
 * `scripts/diagnostics/render_all_trials.py` — passes `vadose_offset_m`.
+* `working_style.md` — added §40 ("BGL es el datum canónico").
 * `CHANGELOG.md` — this entry.
 
 ---

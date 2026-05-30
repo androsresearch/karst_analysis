@@ -235,6 +235,7 @@ def plot_bic_curves(
     project_root: Optional[Path] = None,
     output_path: Optional[str | Path] = None,
     figsize: Optional[tuple] = None,
+    n_max: Optional[int] = None,
 ) -> plt.Figure:
     """Plot BIC(N) for every well, both smoothings, on one figure.
 
@@ -244,10 +245,22 @@ def plot_bic_curves(
     Parameters
     ----------
     well_ids : list[str]
+        Subplots are rendered left-to-right in this exact order. To get
+        an alphabetical layout, pass ``sorted(well_ids)``.
     campaign : str
     project_root : Path, optional
     output_path : path-like, optional
     figsize : tuple, optional
+    n_max : int, optional
+        If given, every subplot uses the same fixed x-axis range
+        ``[0, n_max]`` (xticks at every integer from 0 to n_max, xlim
+        ``(-0.5, n_max + 0.5)``). Subplots whose data is sparser than
+        ``n_max`` show empty space on the right — this is a deliberate
+        visual cue that those (well, smoothing) combinations did not
+        converge at higher N. If ``None`` (legacy default), each
+        subplot is auto-scaled by matplotlib to its own data, with
+        xticks at integers up to the data max (or 10, whichever is
+        larger, for backwards compatibility).
     """
     n_wells = len(well_ids)
     if figsize is None:
@@ -259,6 +272,7 @@ def plot_bic_curves(
         axes = [axes]
 
     for ax, well in zip(axes, well_ids):
+        max_n_seen = 0
         for smoothing, color in (("savgol", SAVGOL_COLOR),
                                   ("lowess", LOWESS_COLOR)):
             try:
@@ -280,10 +294,22 @@ def plot_bic_curves(
                            valid.loc[idx_min, "bic"],
                            marker="*", s=200, c=color,
                            edgecolor="black", lw=0.8, zorder=5)
+                max_n_seen = max(max_n_seen, int(valid["n_breakpoints"].max()))
         ax.set_title(well, fontsize=11, fontweight="bold")
         ax.set_xlabel("N", fontsize=10)
         ax.set_ylabel("BIC", fontsize=10)
-        ax.set_xticks(range(0, 11))
+
+        # X-axis range. Fixed when n_max is given (uniform across
+        # wells, exposes non-convergence as empty space on the right);
+        # otherwise per-subplot dynamic, clamped at >= 10 for backwards
+        # compatibility with the v17.2 behaviour.
+        if n_max is not None:
+            ax.set_xticks(range(0, n_max + 1))
+            ax.set_xlim(-0.5, n_max + 0.5)
+        else:
+            upper = max(max_n_seen, 10)
+            ax.set_xticks(range(0, upper + 1))
+
         ax.tick_params(labelsize=8)
         ax.grid(True, alpha=0.25, linestyle=":")
         ax.legend(fontsize=7.5, loc="best", framealpha=0.92,

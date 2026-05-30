@@ -128,7 +128,12 @@ def main() -> int:
     if not args.skip_figures:
         fig_dir.mkdir(parents=True, exist_ok=True)
 
-    target_wells = args.wells if args.wells else list(WELLS.keys())
+    # Default to alphabetical ordering when --wells is not given. This
+    # affects every per-well loop in this script: BIC-curve subplot
+    # order (AW5D, AW6D, BW3D, LRS69D, LRS70D from left to right),
+    # row order in robustness_clusters.csv and sensitivity_clusters.csv,
+    # and the print sequence. Per-well figure filenames are unaffected.
+    target_wells = args.wells if args.wells else sorted(WELLS.keys())
     print()
     print("=" * 72)
     print(" SEC BREAKPOINT ROBUSTNESS ANALYSIS")
@@ -201,6 +206,7 @@ def main() -> int:
             fig = plot_bic_curves(
                 target_wells, campaign=campaign,
                 output_path=fig_dir / "bic_curves.png",
+                n_max=n_max,
             )
             plt.close(fig)
             print(f"\n✓ BIC curves saved")

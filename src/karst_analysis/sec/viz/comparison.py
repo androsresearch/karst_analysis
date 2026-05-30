@@ -27,17 +27,48 @@ def plot_smoothing_comparison(
     lowess_label: str = "LOWESS",
     figure_size: tuple = (10, 11),
     figure_dpi: int = 150,
-    depth_axis_label: str = "Depth below ground level (m)",
+    depth_axis_label: Optional[str] = None,
     invert_y: bool = True,
     zoom_depth_range: Optional[tuple] = None,
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """Two-panel figure: left = both methods overlaid on raw, right = optional zoom.
 
     The point of this figure is to make the visual decision easy: which
     smoother better preserves the transitions you care about?
+
+    Parameters
+    ----------
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to every depth value before
+        plotting, to convert the SEC pipeline's native water-table
+        datum to below-ground-level. Pass the well's
+        ``vadose_thickness_m`` from ``data/metadata/wells.csv``. The
+        default of 0.0 keeps depths in water-table datum; any nonzero
+        value plots in BGL. BGL is the canonical datum for
+        karst_analysis (see CHANGELOG v17.3).
+    depth_axis_label : str, optional
+        Custom y-axis label. If ``None`` (default), derived from
+        ``vadose_offset_m``: ``"Depth below ground level (m)"`` for
+        nonzero offset, else ``"Depth below water table (m)"``.
     """
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    # ── Datum shift ----------------------------------------------------
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_savgol = np.asarray(z_savgol, dtype=float) + vadose_offset_m
+    z_lowess = np.asarray(z_lowess, dtype=float) + vadose_offset_m
+    if zoom_depth_range is not None and vadose_offset_m != 0.0:
+        zoom_depth_range = (
+            zoom_depth_range[0] + vadose_offset_m,
+            zoom_depth_range[1] + vadose_offset_m,
+        )
+    if depth_axis_label is None:
+        depth_axis_label = (
+            "Depth below ground level (m)" if vadose_offset_m > 0
+            else "Depth below water table (m)"
+        )
 
     n_panels = 2 if zoom_depth_range else 1
     fig, axes = plt.subplots(

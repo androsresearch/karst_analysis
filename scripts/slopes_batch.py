@@ -49,6 +49,7 @@ from typing import Optional
 import pandas as pd
 import yaml
 
+from karst_analysis.corrections import get_vadose_thickness
 from karst_analysis.sec.breakpoints import (
     extract_breakpoints,
     get_breakpoint_data,
@@ -209,6 +210,19 @@ def _process_job(
             z_sm   = df_sm["depth_m"].to_numpy()
             ec_sm  = df_sm["sec_uS_cm"].to_numpy()
 
+            # Look up vadose-zone thickness so the figures render in BGL
+            # (the canonical datum). If the well is not in wells.csv we
+            # fall back to 0.0 and the figures stay in water-table datum
+            # with an honest "Depth below water table (m)" label.
+            try:
+                vadose_offset_m = get_vadose_thickness(job.well)
+            except (KeyError, FileNotFoundError) as exc:
+                logger.warning(
+                    f"  no vadose value for {job.well} "
+                    f"({exc}); plotting in water-table datum"
+                )
+                vadose_offset_m = 0.0
+
             well_fig_dir = fig_dir / job.well
             well_fig_dir.mkdir(parents=True, exist_ok=True)
             title_base = (
@@ -229,6 +243,7 @@ def _process_job(
                     axis_scale="log10",
                     title=f"{title_base}  —  log₁₀(SEC)",
                     method_label=job.method.upper(),
+                    vadose_offset_m=vadose_offset_m,
                 )
                 fig_paths.append(p_log)
             except Exception as e:
@@ -248,6 +263,7 @@ def _process_job(
                         axis_scale="linear",
                         title=f"{title_base}  —  linear SEC",
                         method_label=job.method.upper(),
+                        vadose_offset_m=vadose_offset_m,
                     )
                     fig_paths.append(p_lin)
                 except Exception as e:

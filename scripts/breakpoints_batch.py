@@ -46,7 +46,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from karst_analysis.corrections import load_well_metadata
+from karst_analysis.corrections import get_vadose_thickness, load_well_metadata
 from karst_analysis.io import parse_well_filename
 from karst_analysis.runs import register_run
 from karst_analysis.sec.breakpoints import best_n_breakpoints
@@ -202,6 +202,18 @@ def process_one_well(
         z_lowess = df_lowess["depth_m"].to_numpy()
         EC_lowess = df_lowess["sec_uS_cm"].to_numpy()
 
+        # Vadose-zone thickness so the comparison figures render in BGL
+        # (the canonical datum). Falls back to water-table datum with
+        # honest label if the well is not in wells.csv.
+        try:
+            vadose_offset_m = get_vadose_thickness(info.well_id)
+        except (KeyError, FileNotFoundError) as exc:
+            logger.warning(
+                f"  no vadose value for {info.well_id} "
+                f"({exc}); plotting in water-table datum"
+            )
+            vadose_offset_m = 0.0
+
         for n in range(1, max_bp + 1):
             try:
                 fp = well_fig_dir / f"{info.well_id}_{info.date}_N{n:02d}.png"
@@ -215,6 +227,7 @@ def process_one_well(
                     trial="trial_1",
                     output_path=fp,
                     title=f"{info.well_id} {info.date}",
+                    vadose_offset_m=vadose_offset_m,
                 )
                 fig_paths.append(fp)
             except Exception as e:

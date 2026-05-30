@@ -47,6 +47,7 @@ from typing import Optional
 
 import pandas as pd
 
+from karst_analysis.corrections import get_vadose_thickness
 from karst_analysis.io import parse_well_filename
 from karst_analysis.sec.io import load_ysi_csv
 from karst_analysis.sec.viz import (
@@ -219,6 +220,13 @@ def render_bundle(
     z_low = low["depth_m"].to_numpy()
     EC_low = low["sec_uS_cm"].to_numpy()
 
+    # Vadose-zone thickness so figures render in BGL (canonical datum).
+    # Falls back to water-table datum with honest label if unknown.
+    try:
+        vadose_offset_m = get_vadose_thickness(bundle.well_id)
+    except (KeyError, FileNotFoundError):
+        vadose_offset_m = 0.0
+
     rendered = 0
     for n in range(1, n_max + 1):
         plot_breakpoints_compare_methods(
@@ -231,6 +239,7 @@ def render_bundle(
             trial=trial,
             output_path=out_dir / f"{bundle.well_id}_{bundle.date}_N{n:02d}.png",
             title=f"{bundle.well_id} {bundle.date}",
+            vadose_offset_m=vadose_offset_m,
         )
         rendered += 1
 

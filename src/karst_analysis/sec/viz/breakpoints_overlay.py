@@ -340,6 +340,7 @@ def plot_breakpoints_overlay(
     figure_dpi: int = 130,
     invert_y: bool = True,
     label_side: str = "right",
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """One-panel plot: raw scatter + smoothed line + BPs as diamonds.
 
@@ -364,6 +365,15 @@ def plot_breakpoints_overlay(
         Which N to plot.
     trial : str, default "trial_1"
         Which trial to read from the JSON.
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to every depth value before
+        plotting, to convert the SEC pipeline's native water-table
+        datum to below-ground-level. Pass the well's
+        ``vadose_thickness_m`` from ``data/metadata/wells.csv``. The
+        default of 0.0 leaves depths in water-table datum and labels
+        the y-axis ``"Depth below water table (m)"``; any nonzero
+        value labels it ``"Depth below ground level (m)"``. BGL is the
+        canonical datum for karst_analysis (see CHANGELOG v17.3).
     """
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -373,6 +383,15 @@ def plot_breakpoints_overlay(
         bic_data, n_breakpoints, trial=trial, output_space="linear",
     )
     bic_value = get_metric_at_n(bic_data, n_breakpoints, metric="bic", trial=trial)
+
+    # ── Datum shift ----------------------------------------------------
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_smooth = np.asarray(z_smooth, dtype=float) + vadose_offset_m
+    breakpoint_depths = [d + vadose_offset_m for d in breakpoint_depths]
+    depth_axis_label = (
+        "Depth below ground level (m)" if vadose_offset_m > 0
+        else "Depth below water table (m)"
+    )
 
     fig, ax = plt.subplots(figsize=figure_size)
 
@@ -401,7 +420,7 @@ def plot_breakpoints_overlay(
     )
 
     ax.set_xlabel("Specific electrical conductivity [µS/cm]")
-    ax.set_ylabel("Depth below ground level (m)")
+    ax.set_ylabel(depth_axis_label)
     if title:
         ax.set_title(title, fontsize=11, fontweight="bold")
     if invert_y:
@@ -439,6 +458,7 @@ def plot_breakpoints_compare_methods(
     figure_dpi: int = 130,
     invert_y: bool = True,
     share_x: bool = True,
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """Two-panel comparison: same well at the same N, two smoothers.
 
@@ -461,6 +481,16 @@ def plot_breakpoints_compare_methods(
         N to plot (same in both panels).
     trial : str, default "trial_1"
         Which trial to read in BOTH panels.
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to every depth value (raw,
+        smoothed, and breakpoint markers) before plotting, to convert
+        the SEC pipeline's native water-table datum to below-ground-
+        level. Pass the well's ``vadose_thickness_m`` from
+        ``data/metadata/wells.csv``. The default of 0.0 leaves depths
+        in water-table datum and labels the y-axis ``"Depth below
+        water table (m)"``; any nonzero value labels it ``"Depth below
+        ground level (m)"``. BGL is the canonical datum for
+        karst_analysis (see CHANGELOG v17.3).
     """
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -476,6 +506,17 @@ def plot_breakpoints_compare_methods(
     )
     bic_left   = get_metric_at_n(bic_data_left,  n_breakpoints, metric="bic", trial=trial)
     bic_right  = get_metric_at_n(bic_data_right, n_breakpoints, metric="bic", trial=trial)
+
+    # ── Datum shift ----------------------------------------------------
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_left = np.asarray(z_left, dtype=float) + vadose_offset_m
+    z_right = np.asarray(z_right, dtype=float) + vadose_offset_m
+    bps_left = [d + vadose_offset_m for d in bps_left]
+    bps_right = [d + vadose_offset_m for d in bps_right]
+    depth_axis_label = (
+        "Depth below ground level (m)" if vadose_offset_m > 0
+        else "Depth below water table (m)"
+    )
 
     fig, axes = plt.subplots(
         1, 2, figsize=figure_size, sharey=True, sharex=share_x,
@@ -519,7 +560,7 @@ def plot_breakpoints_compare_methods(
         ax.grid(True, ls=":", alpha=0.4)
         ax.legend(loc="lower right", fontsize=8, framealpha=0.92)
 
-    axes[0].set_ylabel("Depth below ground level (m)")
+    axes[0].set_ylabel(depth_axis_label)
 
     # Invert y AFTER the panels-loop. With sharey=True the two axes are
     # the same y-axis; calling invert_yaxis() once per panel inverts it

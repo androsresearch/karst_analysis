@@ -55,6 +55,7 @@ def plot_slopes_overlay(
     figure_size: tuple = (9, 11),
     figure_dpi: int = 130,
     invert_y: bool = True,
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """Plot SEC profile + breakpoints + chord slope labels.
 
@@ -62,6 +63,8 @@ def plot_slopes_overlay(
     ----------
     z_raw, EC_raw : np.ndarray
         Raw cast (depth_m, sec_uS_cm). Plotted as a faint scatter.
+        ``depth_m`` is in the SEC pipeline's native datum (zero at the
+        water table). To plot in BGL, set ``vadose_offset_m`` below.
     z_smooth, EC_smooth : np.ndarray
         Smoothed profile (depth_m, sec_uS_cm), as fed to the breakpoint
         detector. Plotted as a solid line.
@@ -71,7 +74,8 @@ def plot_slopes_overlay(
         ``log10_sec_top``, ``log10_sec_bottom``,
         ``sec_top_uS_cm``, ``sec_bottom_uS_cm``,
         ``slope_log10``, ``slope_linear_uS_cm_per_m``,
-        ``is_top_of_mixing``, ``is_bottom_of_mixing``.
+        ``is_top_of_mixing``, ``is_bottom_of_mixing``. The depth columns
+        are expected in the same datum as ``z_smooth``.
     output_path : str or Path
         Where to save the PNG. Parent directory is created.
     axis_scale : {"linear", "log10"}
@@ -80,6 +84,16 @@ def plot_slopes_overlay(
         Figure title (e.g. "LRS70D · 2022-01-31 · LOWESS · N=15").
     method_label : str
         Legend label for the smoothed curve.
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to every depth value before
+        plotting, to convert the SEC pipeline's native water-table
+        datum to below-ground-level. Pass the well's
+        ``vadose_thickness_m`` from ``data/metadata/wells.csv``. The
+        default of 0.0 leaves the data in water-table datum and labels
+        the y-axis ``"Depth below water table (m)"`` to be explicit;
+        any nonzero value labels the y-axis
+        ``"Depth below ground level (m)"``. BGL is the canonical datum
+        for the karst_analysis project (see CHANGELOG v17.3).
 
     Returns
     -------
@@ -93,6 +107,23 @@ def plot_slopes_overlay(
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    # ── Datum shift -------------------------------------------------
+    # The SEC pipeline is in water-table datum; we shift to BGL if a
+    # nonzero offset was provided. All Y values (raw, smoothed, and
+    # depth columns of slopes_df) are shifted by the same amount, so
+    # relative positions are preserved.
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_smooth = np.asarray(z_smooth, dtype=float) + vadose_offset_m
+    if vadose_offset_m != 0.0 and len(slopes_df) > 0:
+        slopes_df = slopes_df.copy()
+        slopes_df["depth_top"] = slopes_df["depth_top"] + vadose_offset_m
+        slopes_df["depth_bottom"] = slopes_df["depth_bottom"] + vadose_offset_m
+
+    depth_axis_label = (
+        "Depth below ground level (m)" if vadose_offset_m > 0
+        else "Depth below water table (m)"
+    )
 
     # ── X-axis transformation -----------------------------------------
     # Both raw and smoothed curves are in linear µS/cm; transform if
@@ -156,7 +187,7 @@ def plot_slopes_overlay(
 
     # ── Cosmetics -----------------------------------------------------
     ax.set_xlabel(x_label, fontsize=11)
-    ax.set_ylabel("Depth (m)", fontsize=11)
+    ax.set_ylabel(depth_axis_label, fontsize=11)
     if title:
         ax.set_title(title, fontsize=12, fontweight="bold")
     if invert_y:

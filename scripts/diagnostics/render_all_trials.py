@@ -36,6 +36,7 @@ from typing import Optional
 
 import pandas as pd
 
+from karst_analysis.corrections import get_vadose_thickness
 from karst_analysis.sec.io import load_ysi_csv
 from karst_analysis.sec.viz import (
     load_bic_json,
@@ -178,6 +179,18 @@ def main() -> int:
         bic_sav = load_bic_json(b.sav_json)
         bic_low = load_bic_json(b.low_json)
 
+        # Look up vadose-zone thickness so figures render in BGL
+        # (the canonical datum). If the well is missing from
+        # wells.csv, fall back to 0.0 (water-table datum, honest label).
+        try:
+            vadose_offset_m = get_vadose_thickness(b.well_id)
+        except (KeyError, FileNotFoundError) as exc:
+            logger.warning(
+                f"  no vadose value for {b.well_id} "
+                f"({exc}); plotting in water-table datum"
+            )
+            vadose_offset_m = 0.0
+
         well_dir = out_dir / b.well_id
         well_dir.mkdir(parents=True, exist_ok=True)
 
@@ -195,6 +208,7 @@ def main() -> int:
                         trial=trial,
                         output_path=fp,
                         title=f"{b.well_id} {b.date}  N={n}  {trial}",
+                        vadose_offset_m=vadose_offset_m,
                     )
                     n_total += 1
                 except Exception as e:

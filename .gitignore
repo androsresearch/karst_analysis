@@ -54,6 +54,9 @@ backups/
 repo_inventory.txt
 repo_inventory_code.txt
 
+# Internal collaboration notes (process — NOT science)
+working_style.md
+
 # Throwaway scripts kept locally (if any)
 throwaways/
 scratch/

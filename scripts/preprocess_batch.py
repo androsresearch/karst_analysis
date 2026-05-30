@@ -177,12 +177,23 @@ def _process_one(
                 sec_col = "sec_uS_cm" if "sec_uS_cm" in df_raw.columns else "Corrected sp Cond [µS/cm]"
                 fig_dir.mkdir(parents=True, exist_ok=True)
                 fig_path = fig_dir / f"{info.well_id}_{info.date}__{run.method_signature}.png"
+
+                # Vadose-zone thickness so figures render in BGL
+                # (canonical datum). Falls back to water-table datum
+                # with honest label if the well is missing from
+                # wells.csv.
+                try:
+                    vadose_offset_m = get_vadose_thickness(info.well_id)
+                except (KeyError, FileNotFoundError):
+                    vadose_offset_m = 0.0
+
                 plot_diagnostic(
                     df_raw[depth_col].to_numpy(), df_raw[sec_col].to_numpy(),
                     df_out[depth_col].to_numpy(), df_out[sec_col].to_numpy(),
                     output_path=fig_path,
                     title=f"{info.well_id} {info.date} — {m}",
                     method_info=run.method_signature,
+                    vadose_offset_m=vadose_offset_m,
                 )
 
                 run.note = ""

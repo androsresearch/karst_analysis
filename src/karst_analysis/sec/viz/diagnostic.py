@@ -28,15 +28,18 @@ def plot_diagnostic(
     breakpoints: Optional[list[tuple[float, float]]] = None,
     figure_size: tuple = (8, 11),
     figure_dpi: int = 150,
-    depth_axis_label: str = "Depth below ground level (m)",
+    depth_axis_label: Optional[str] = None,
     invert_y: bool = True,
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """Plot raw vs processed profile, optionally with zoom and breakpoints.
 
     Parameters
     ----------
     z_raw, EC_raw : np.ndarray
-        Raw profile (used as the grey scatter background).
+        Raw profile (used as the grey scatter background). Depths in
+        whatever datum the caller chose; pass ``vadose_offset_m`` to
+        convert from water-table datum to BGL.
     z_proc, EC_proc : np.ndarray
         Processed profile (overlaid as a line).
     output_path : str or Path
@@ -49,12 +52,26 @@ def plot_diagnostic(
     show_zoom_panel : bool, default False
         If True, append a second panel zoomed into ``zoom_depth_range``.
     zoom_depth_range : (z_min, z_max), required if ``show_zoom_panel``.
+        Interpreted in the SAME datum as ``z_raw`` / ``z_proc`` AFTER
+        the vadose offset is applied.
     breakpoints : list of (depth, EC) tuples, optional
-        Markers overlaid on both panels.
+        Markers overlaid on both panels. Depths are shifted by the same
+        ``vadose_offset_m`` as the profiles.
     figure_size, figure_dpi : matplotlib output controls.
-    depth_axis_label : str
+    depth_axis_label : str, optional
+        Custom y-axis label. If ``None`` (default), derived from
+        ``vadose_offset_m`` — see that parameter.
     invert_y : bool, default True
         If True, depth grows downward (typical for borehole plots).
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to every depth value before
+        plotting, to convert the SEC pipeline's native water-table
+        datum to below-ground-level. Pass the well's
+        ``vadose_thickness_m`` from ``data/metadata/wells.csv``. When
+        ``depth_axis_label`` is ``None``, the y-label is auto-derived:
+        ``"Depth below ground level (m)"`` for nonzero offset, else
+        ``"Depth below water table (m)"``. BGL is the canonical datum
+        for karst_analysis (see CHANGELOG v17.3).
 
     Returns
     -------
@@ -66,6 +83,22 @@ def plot_diagnostic(
 
     if show_zoom_panel and zoom_depth_range is None:
         raise ValueError("show_zoom_panel requires zoom_depth_range=(z_min, z_max)")
+
+    # ── Datum shift ----------------------------------------------------
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_proc = np.asarray(z_proc, dtype=float) + vadose_offset_m
+    if breakpoints is not None and vadose_offset_m != 0.0:
+        breakpoints = [(d + vadose_offset_m, ec) for (d, ec) in breakpoints]
+    if zoom_depth_range is not None and vadose_offset_m != 0.0:
+        zoom_depth_range = (
+            zoom_depth_range[0] + vadose_offset_m,
+            zoom_depth_range[1] + vadose_offset_m,
+        )
+    if depth_axis_label is None:
+        depth_axis_label = (
+            "Depth below ground level (m)" if vadose_offset_m > 0
+            else "Depth below water table (m)"
+        )
 
     n_panels = 2 if show_zoom_panel else 1
     fig, axes = plt.subplots(
@@ -141,14 +174,34 @@ def plot_balance_histogram(
     n_bins: int = 40,
     figure_size: tuple = (10, 5),
     figure_dpi: int = 150,
-    depth_axis_label: str = "Depth below ground level (m)",
+    depth_axis_label: Optional[str] = None,
+    vadose_offset_m: float = 0.0,
 ) -> Path:
     """Side-by-side histograms of point counts per depth bin (raw vs processed).
 
     Useful for verifying whether resampling improved sampling balance.
+
+    Parameters
+    ----------
+    vadose_offset_m : float, default 0.0
+        Vertical offset (in metres) added to depth values before
+        binning, to convert water-table datum to BGL. See
+        :func:`plot_diagnostic` for full semantics. BGL is the
+        canonical datum for karst_analysis (see CHANGELOG v17.3).
+    depth_axis_label : str, optional
+        Custom y-axis label. If ``None``, derived from
+        ``vadose_offset_m``.
     """
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    z_raw = np.asarray(z_raw, dtype=float) + vadose_offset_m
+    z_proc = np.asarray(z_proc, dtype=float) + vadose_offset_m
+    if depth_axis_label is None:
+        depth_axis_label = (
+            "Depth below ground level (m)" if vadose_offset_m > 0
+            else "Depth below water table (m)"
+        )
 
     z_min = float(min(z_raw.min(), z_proc.min()))
     z_max = float(max(z_raw.max(), z_proc.max()))

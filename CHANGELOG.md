@@ -4,6 +4,215 @@ All notable changes to `karst_analysis` are documented here. Older
 versions (v1–v17.1) shipped as zip patches with PowerShell installers;
 their internal notes live under `backups/`.
 
+## v17.4 — 2026-05-29
+
+### feat: BIC curves panel — alphabetical layout + fixed N axis to expose non-convergence
+
+#### What changed
+
+* `karst_analysis.sec.robustness.viz.plot_bic_curves` gained an optional
+  `n_max: int | None = None` keyword argument. When given, every
+  subplot uses the same fixed x-axis range ``[0, n_max]`` with integer
+  xticks at each step and ``xlim = (-0.5, n_max + 0.5)``. Subplots
+  whose data does not extend to ``n_max`` show empty space on the
+  right — this is deliberate, to visualise where a (well, smoothing)
+  combination did not converge at higher N.
+* When ``n_max`` is omitted (legacy path), the function still works
+  but now uses a per-subplot dynamic upper bound (clamped at ≥ 10 for
+  backwards compatibility with the v17.2 behaviour of hard-coded
+  ``range(0, 11)`` xticks).
+* `scripts/sec_robustness_analysis.py` now defaults its well order to
+  ``sorted(WELLS.keys())`` instead of ``list(WELLS.keys())`` — so
+  without ``--wells``, every per-well loop (BIC subplots, CSV rows,
+  console output) processes wells alphabetically:
+  AW5D → AW6D → BW3D → LRS69D → LRS70D. Passing ``--wells``
+  explicitly preserves the user's order.
+* The script now passes ``n_max=n_max`` (resolved from the config
+  block ``robustness.n_max`` or the CLI flag ``--n-max``, which is
+  ``15`` in the current ``config/pipeline.yml``) to
+  ``plot_bic_curves``. So the rendered figure always uses the same
+  N range that the rest of the robustness analysis uses.
+
+#### Why
+
+The previous BIC curves figure had two papercut bugs:
+
+1. **xticks hardcoded to 0..10.** Even though the BIC-sweep JSONs
+   already contain N up to 15 (the ``data/breakpoints/2022_02/*__bp-*-max15-t3.json``
+   files), the figure only showed tick labels up to 10, so the curves
+   appeared to extend past the labelled axis end with no way for the
+   reader to read off where the BIC minimum landed for higher N.
+2. **Subplot order followed dict declaration order**
+   (LRS70D first because it was declared first in ``WELLS``), which
+   is opaque to a reader. Alphabetical is the obvious default and
+   matches how rows appear in the joined CSVs.
+
+The fix also gives the figure a defensible scientific role: with a
+fixed x-axis at N=0..15 across all 5 wells, an empty right segment in
+any subplot directly exposes that the corresponding (well, smoothing)
+fit did not converge to that N. That's a feature, not a flaw — the
+thesis can now cite the BIC figure as evidence of where each pozo's
+optimal complexity sits relative to the others.
+
+#### Defaults / breaking change
+
+* The function signature is back-compatible: callers that never
+  passed ``n_max`` still work, just with the slightly improved legacy
+  dynamic-with-floor-10 behaviour instead of the hard-coded 0..10.
+* The script's CLI surface is unchanged. Default-invocation
+  (``uv run python scripts/sec_robustness_analysis.py``) now produces
+  the alphabetical, N=0..15 figure.
+
+#### No re-computation of breakpoints
+
+This patch is pure visualisation. It does NOT call
+``breakpoints_batch.py`` and does NOT re-fit any BIC sweep. The
+existing JSONs under ``data/breakpoints/2022_02/`` are read as-is.
+This is important: the breakpoint detector is seed-sensitive
+(documented in ``NOTES_open_questions.md``), so re-running it would
+shift the BIC values by small but visible amounts. Plot-only fix
+preserves the exact numbers that have already been cited downstream.
+
+#### Files touched
+
+* `src/karst_analysis/sec/robustness/viz.py` — modified.
+* `scripts/sec_robustness_analysis.py` — modified.
+* `CHANGELOG.md` — this entry.
+
+---
+
+## v17.3 — 2026-05-29
+
+### fix: SEC figures now plot in below-ground-level datum (canonical)
+
+#### What changed
+
+Six visualisation functions gained a new `vadose_offset_m: float = 0.0`
+keyword argument:
+
+* `karst_analysis.sec.viz.slopes_overlay.plot_slopes_overlay`
+* `karst_analysis.sec.viz.breakpoints_overlay.plot_breakpoints_overlay`
+* `karst_analysis.sec.viz.breakpoints_overlay.plot_breakpoints_compare_methods`
+* `karst_analysis.sec.viz.diagnostic.plot_diagnostic`
+* `karst_analysis.sec.viz.diagnostic.plot_balance_histogram`
+* `karst_analysis.sec.viz.comparison.plot_smoothing_comparison`
+
+The parameter is added to the depth axis of every Y-coordinate the
+function plots (raw scatter, smoothed line, breakpoint markers,
+breakpoint label text, slopes_df `depth_top` / `depth_bottom`, zoom
+ranges). The y-axis label is derived automatically from the offset:
+
+* `vadose_offset_m > 0`  →  `"Depth below ground level (m)"`
+* `vadose_offset_m == 0` (default)  →  `"Depth below water table (m)"`
+
+For `plot_diagnostic`, `plot_balance_histogram`, and
+`plot_smoothing_comparison`, the existing `depth_axis_label` argument
+still wins if the caller passes a non-None value (escape hatch).
+
+Five callers were updated to look up the well's
+`vadose_thickness_m` from `data/metadata/wells.csv` via
+`karst_analysis.corrections.get_vadose_thickness(well_id)` and pass it
+through:
+
+* `scripts/slopes_batch.py`
+* `scripts/breakpoints_batch.py`
+* `scripts/preprocess_batch.py`
+* `scripts/regenerate_breakpoint_figures.py`
+* `scripts/diagnostics/render_all_trials.py`
+
+Each caller falls back to `vadose_offset_m = 0.0` (with a warning) when
+the well isn't in `wells.csv`, so the scripts still produce a figure —
+just in water-table datum with an honest label.
+
+#### Why
+
+Discovered while regenerating the SEC × caliper × video panel for
+LRS70D (the thesis flagship case): the SEC-only branch of the figure
+pipeline (slopes plots, breakpoint trial inspection, diagnostic
+overlays) was plotting depth values straight from the SEC pipeline's
+native `depth_m` column — which is referenced to the **water table**,
+zero at the air-water interface inside the well — but labelling the
+y-axis as `"Depth below ground level (m)"`. The convergence panels
+(`sec_caliper_video`, `sec_caliper_panel`, `site_panel`,
+`caliper/viz`) were already in BGL correctly, because they convert
+via `data/metadata/wells.csv` before plotting.
+
+This meant that for LRS70D, the breakpoint labelled "1.09 m below
+ground level" in the slopes figure was actually at 1.92 m BGL
+(1.09 m below the water table, where the water table sits 0.83 m
+below ground level). The offset is the well's vadose-zone thickness.
+For BW3D the offset is 3.28 m, large enough to materially misalign
+breakpoints with the caliper anomalies and video-log features they
+were supposedly converging onto.
+
+BGL is the canonical datum for `karst_analysis`, because every
+cross-technique anchor — ground-level elevation, caliper trace zero,
+video-log observations, Ardaman lithology, future ERT 2D — lives in
+BGL. Cross-technique convergence requires a single datum and that
+datum has to be the one the physical anchors use.
+
+The SEC CSVs themselves (`data/processed/sec/`, `data/breakpoints/`,
+`data/slopes/`) stay in water-table datum — they are the model's
+native output and the source of scientific record. Only the figures
+migrate.
+
+#### Breaking change (label only, not data)
+
+For any caller that did NOT pass `vadose_offset_m` after this patch,
+the y-axis label changes from `"Depth below ground level (m)"`
+(which was wrong) to `"Depth below water table (m)"` (which is
+honest). The data plotted is unchanged in that case. To restore the
+BGL label and have the depth values actually be BGL, the caller must
+pass `vadose_offset_m=get_vadose_thickness(well_id)`. The five
+scripts in this repo already do this.
+
+#### Out of scope / deferred
+
+* `notebooks/01_preprocess_batch.ipynb` and
+  `notebooks/02_compare_smoothing.ipynb` call `plot_diagnostic` /
+  `plot_smoothing_comparison` directly. They still work but produce
+  figures labelled `"Depth below water table (m)"` until updated to
+  pass `vadose_offset_m`. Tracked as follow-up; not blocking the
+  thesis.
+* The `breakpoints_trial_inspection` figures historically used in
+  thesis-text references for LRS70D need re-generation; this is the
+  first thing to run after applying the patch (see "Regeneration
+  workflow" below).
+
+#### Regeneration workflow for LRS70D
+
+After applying this patch, regenerate every SEC figure that mentions
+LRS70D so the thesis text references match the canonical datum:
+
+```powershell
+cd C:\Users\Mariana\Documents\karst_analysis
+# 1. Slopes figures (uses the existing slopes_jobs YAML)
+uv run python scripts\slopes_batch.py --jobs config\slopes_jobs_2022_02.yml
+# 2. Trial-inspection figures for LRS70D
+uv run python scripts\diagnostics\render_all_trials.py --campaign 2022_02 --only LRS70D
+# 3. Convergence panels (already in BGL; safe to re-render for consistency)
+uv run python scripts\sec_caliper_video_panels.py --jobs config\slopes_jobs_2022_02.yml
+```
+
+LRS70D BPs in BGL (LOWESS, N=15, trial 3) will be at: 1.92, 3.16,
+4.07, 4.81, 9.11, 9.88, 11.69, 12.42, 12.78, 13.30, 14.10, 16.76,
+22.09, 24.61, 26.40 m.
+
+#### Files touched
+
+* `src/karst_analysis/sec/viz/slopes_overlay.py` — modified.
+* `src/karst_analysis/sec/viz/breakpoints_overlay.py` — modified.
+* `src/karst_analysis/sec/viz/diagnostic.py` — modified.
+* `src/karst_analysis/sec/viz/comparison.py` — modified.
+* `scripts/slopes_batch.py` — passes `vadose_offset_m`.
+* `scripts/breakpoints_batch.py` — passes `vadose_offset_m`.
+* `scripts/preprocess_batch.py` — passes `vadose_offset_m`.
+* `scripts/regenerate_breakpoint_figures.py` — passes `vadose_offset_m`.
+* `scripts/diagnostics/render_all_trials.py` — passes `vadose_offset_m`.
+* `CHANGELOG.md` — this entry.
+
+---
+
 ## v17.2 — 2026-05-29
 
 ### SEC × caliper × video panels: jobs-driven rendering + mixing-zone colouring

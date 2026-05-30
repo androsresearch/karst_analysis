@@ -73,8 +73,78 @@ from karst_analysis.videolog.io import DEFAULT_VIDEOLOG_XLSX, load_video_notes
 #  Visual constants
 # ──────────────────────────────────────────────────────────────────────
 SEC_COLOR: str = "#1d4ed8"        # dark blue — does not clash with severity yellows/reds
-BP_COLOR: str = "#ff7f0e"         # orange — for BP markers and label text
+BP_COLOR: str = "#ff7f0e"         # orange — regular BPs (no mixing-zone flag)
+BP_COLOR_TOP_MZ: str = "#c0392b"  # deep red — TOP of mixing zone (matches slopes_overlay)
+BP_COLOR_BOT_MZ: str = "#8e44ad"  # purple   — BOTTOM of mixing zone (matches slopes_overlay)
 BP_GUIDE_COLOR: str = "#9ca3af"   # neutral grey for the dotted depth guide line
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Mixing-zone flag loader
+# ──────────────────────────────────────────────────────────────────────
+def _load_mixing_zone_bp_flags(
+    *,
+    well_id: str,
+    campaign: str,
+    method: str,
+    n: int,
+    trial: str,
+    project_root: Path,
+) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Read the mixing-zone flags for a (well, method, trial, N) job.
+
+    Looks up the slopes CSV produced by ``scripts/slopes_batch.py``::
+
+        data/slopes/<campaign>/{well_id}_{date}__slopes-{method}-N{n}-t{idx}.csv
+
+    and maps its per-pair flags ``is_top_of_mixing`` / ``is_bottom_of_mixing``
+    onto a per-breakpoint mask of length ``n``.
+
+    Mapping rule (same as :mod:`karst_analysis.sec.viz.slopes_overlay`):
+    pair *i* (0-based) has ``depth_top`` equal to the *i*-th breakpoint in
+    depth-ascending order, so ``is_top_of_mixing[i] == True`` flags the
+    (*i*+1)-th BP (1-based) as TOP of the mixing zone. The very last
+    breakpoint (index ``n``) corresponds to a ``depth_bottom`` and is
+    therefore never flagged.
+
+    Returns
+    -------
+    (mask_top, mask_bot) : tuple of np.ndarray or None
+        Boolean arrays of length ``n`` aligned with ``bp_df.bp_index``
+        (1..n). ``(None, None)`` if the slopes CSV is missing — the
+        caller should then render the panel without mixing-zone colours
+        and emit a warning.
+    """
+    from karst_analysis.sec.jobs_io import trial_index
+
+    idx = trial_index(trial)
+    folder = project_root / "data" / "slopes" / campaign
+    if not folder.is_dir():
+        return None, None
+
+    pattern = f"{well_id}_*__slopes-{method}-N{n}-t{idx}.csv"
+    candidates = sorted(folder.glob(pattern))
+    if not candidates:
+        return None, None
+
+    # Most recent wins (consistent with other resolvers in the package).
+    csv_path = max(candidates, key=lambda p: p.stat().st_mtime)
+    slopes_df = pd.read_csv(csv_path)
+
+    expected_rows = n - 1
+    if len(slopes_df) != expected_rows:
+        # Mismatch between N and the chord-pair count — refuse to guess.
+        return None, None
+
+    top_pairs = slopes_df["is_top_of_mixing"].to_numpy(dtype=bool)
+    bot_pairs = slopes_df["is_bottom_of_mixing"].to_numpy(dtype=bool)
+
+    # Promote pair-aligned flags to per-BP flags of length n.
+    mask_top = np.zeros(n, dtype=bool)
+    mask_bot = np.zeros(n, dtype=bool)
+    mask_top[:expected_rows] = top_pairs
+    mask_bot[:expected_rows] = bot_pairs
+    return mask_top, mask_bot
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -153,6 +223,7 @@ def plot_sec_caliper_video_panel(
     smoothing: str,
     n: int,
     campaign: str = "2022_02",
+    trial: str = "trial_1",
     perpoint_csv: Optional[str | Path] = None,
     video_xlsx: Optional[str | Path] = None,
     ardaman_csv: Optional[str | Path] = None,
@@ -176,6 +247,15 @@ def plot_sec_caliper_video_panel(
     campaign : str, default ``"2022_02"``
         Field campaign — must match the directory under
         ``data/processed/sec/<campaign>/``.
+    trial : str, default ``"trial_1"``
+        Which trial of the BIC sweep to read. ``"best_bic"`` lets the
+        loader pick the trial with the lowest BIC at this N. When a
+        matching slopes CSV exists at
+        ``data/slopes/<campaign>/{well}_{date}__slopes-{method}-N{n}-t{idx}.csv``
+        the BPs flagged as TOP / BOTTOM of mixing zone are coloured
+        red / purple respectively (matching ``slopes_overlay``); if the
+        slopes CSV is missing, all BPs render as plain orange diamonds
+        and a warning is printed.
     perpoint_csv, video_xlsx, ardaman_csv, master_caliper_csv : path-like, optional
         Override input paths. ``ardaman_csv`` is consulted only for
         wells whose ``WellConfig`` has ``has_ardaman=True``.
@@ -201,7 +281,8 @@ def plot_sec_caliper_video_panel(
         If the SEC profile or breakpoint JSON is missing for the
         requested (well, campaign, smoothing, n) combination.
     ValueError
-        From the underlying loaders if N exceeds the BIC sweep range.
+        From the underlying loaders if N exceeds the BIC sweep range,
+        or if the requested trial is not present.
     """
     cfg = config or SecCaliperVideoConfig()
     if well_id not in WELLS:
@@ -242,8 +323,25 @@ def plot_sec_caliper_video_panel(
     )
     bp_df = load_breakpoints_at_n(
         well_id=wc.caliper_well, campaign=campaign,
-        smoothing=smoothing, n=n, project_root=project_root,
+        smoothing=smoothing, n=n, trial=trial,
+        project_root=project_root,
     )
+
+    # Mixing-zone flags (None,None) when no slopes CSV is on disk —
+    # render then degrades gracefully to a single-colour BP panel.
+    mz_root = project_root if project_root is not None else Path.cwd()
+    mask_top_mz, mask_bot_mz = _load_mixing_zone_bp_flags(
+        well_id=wc.caliper_well, campaign=campaign,
+        method=smoothing, n=n, trial=trial,
+        project_root=mz_root,
+    )
+    has_mz = mask_top_mz is not None and mask_bot_mz is not None
+    if not has_mz:
+        print(
+            f"  [warn] no slopes CSV found for {wc.caliper_well} "
+            f"{smoothing} N={n} {trial} — BPs rendered without "
+            f"mixing-zone colours. Run scripts/slopes_batch.py first."
+        )
 
     entries = _build_entries(notes_df, ardaman_df)
 
@@ -332,15 +430,45 @@ def plot_sec_caliper_video_panel(
     sec_range = sec_max - sec_min
     ax_sec.set_xlim(sec_min - 0.05*sec_range, sec_max + 0.05*sec_range)
 
-    # BP markers on SEC twin
+    # BP markers on SEC twin — coloured per mixing-zone flag.
     bp_z = bp_df["depth_bgl_m"].to_numpy()
     bp_sec = bp_df["sec_at_bp_uS_cm"].to_numpy()
-    ax_sec.scatter(bp_sec, bp_z, marker="D", s=60,
-                   facecolor=BP_COLOR, edgecolor="black", lw=0.8,
-                   zorder=8, clip_on=False)
+    n_bp = len(bp_df)
+    if has_mz:
+        regular_mask = ~(mask_top_mz | mask_bot_mz)
+    else:
+        regular_mask = np.ones(n_bp, dtype=bool)
+
+    # Per-BP face colour, used both for the diamonds and (below) for
+    # the BP-index label boxes in column 1 — so the chart reads
+    # consistently with slopes_overlay (same red / purple / orange).
+    bp_facecolor = np.full(n_bp, BP_COLOR, dtype=object)
+    if has_mz:
+        bp_facecolor[mask_top_mz] = BP_COLOR_TOP_MZ
+        bp_facecolor[mask_bot_mz] = BP_COLOR_BOT_MZ
+
+    # Plot regular BPs first, then the flagged ones, so the highlights
+    # sit on top (larger marker + thicker edge for emphasis).
+    if regular_mask.any():
+        ax_sec.scatter(
+            bp_sec[regular_mask], bp_z[regular_mask], marker="D", s=60,
+            facecolor=BP_COLOR, edgecolor="black", lw=0.8,
+            zorder=8, clip_on=False,
+        )
+    if has_mz and mask_top_mz.any():
+        ax_sec.scatter(
+            bp_sec[mask_top_mz], bp_z[mask_top_mz], marker="D", s=110,
+            facecolor=BP_COLOR_TOP_MZ, edgecolor="black", lw=1.1,
+            zorder=9, clip_on=False,
+        )
+    if has_mz and mask_bot_mz.any():
+        ax_sec.scatter(
+            bp_sec[mask_bot_mz], bp_z[mask_bot_mz], marker="D", s=110,
+            facecolor=BP_COLOR_BOT_MZ, edgecolor="black", lw=1.1,
+            zorder=9, clip_on=False,
+        )
 
     # ── BP labels in column 1 (ax_bp) ───────────────────────────────
-    n_bp = len(bp_df)
     if n_bp > 0:
         # Rough y → display unit conversion for label-height calibration.
         # Same reasoning as caliper_video.py.
@@ -355,7 +483,9 @@ def plot_sec_caliper_video_panel(
             y_lo=y_min + 0.4, y_hi=y_max - 0.4,
             pad=0.04 * line_h_data,
         )
-        for bp_idx, z_bp, ty in zip(bp_df["bp_index"], bp_z, text_y):
+        for i, (bp_idx, z_bp, ty) in enumerate(zip(
+            bp_df["bp_index"], bp_z, text_y,
+        )):
             # Dotted grey guide line in caliper panel only.
             ax_cal.axhline(z_bp, color=BP_GUIDE_COLOR, lw=0.5, ls=":",
                            alpha=0.55, zorder=2)
@@ -365,13 +495,16 @@ def plot_sec_caliper_video_panel(
                 ax_bp.plot([0.92, 0.99], [ty, z_bp],
                            color=BP_GUIDE_COLOR, lw=0.4,
                            alpha=0.7, zorder=3)
+            # Inherit the marker colour so the label reads consistently
+            # with the diamond it identifies (red / purple / orange).
+            label_color = bp_facecolor[i]
             ax_bp.annotate(
                 f"BP{bp_idx}: {z_bp:.1f} m",
                 xy=(0.95, ty), xycoords=("axes fraction", "data"),
                 ha="right", va="center", fontsize=cfg.bp_fontsize,
-                color=BP_COLOR, fontweight="bold",
+                color=label_color, fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
-                          edgecolor=BP_COLOR, alpha=0.95, lw=0.6),
+                          edgecolor=label_color, alpha=0.95, lw=0.6),
                 zorder=10,
             )
 
@@ -392,6 +525,18 @@ def plot_sec_caliper_video_panel(
     handles.append(Line2D([0], [0], marker="D", color=BP_COLOR,
                           mec="black", mew=0.8, ms=6, ls="None",
                           label=f"BP (N={n})"))
+    if has_mz and mask_top_mz.any():
+        handles.append(Line2D([0], [0], marker="D",
+                              markerfacecolor=BP_COLOR_TOP_MZ,
+                              markeredgecolor="black", mew=1.1, ms=8,
+                              ls="None", color="none",
+                              label="TOP of mixing zone"))
+    if has_mz and mask_bot_mz.any():
+        handles.append(Line2D([0], [0], marker="D",
+                              markerfacecolor=BP_COLOR_BOT_MZ,
+                              markeredgecolor="black", mew=1.1, ms=8,
+                              ls="None", color="none",
+                              label="BOTTOM of mixing zone"))
     for sev in ("mild", "moderate", "severe"):
         if (perpoint_df["severity_per_sample"] == sev).any():
             handles.append(Patch(facecolor=SEVERITY_COLORS[sev],
@@ -475,16 +620,21 @@ def plot_sec_caliper_video_panel(
     ax_note.set_xlabel(right_label, fontsize=10)
 
     # ── Title (preserves the v5.1 fix for the truncated title bug) ──
+    # ``trial`` is rendered humanised: "trial_3" → "trial 3", "best_bic"
+    # passes through verbatim.
+    trial_label = trial.replace("_", " ") if trial.startswith("trial_") else trial
     if wc.video_well == wc.caliper_well:
         title = (
-            f"Well {wc.caliper_well} — caliper + SEC ({smoothing}, N={n})"
+            f"Well {wc.caliper_well} — caliper + SEC "
+            f"({smoothing}, N={n}, {trial_label})"
             f" + video-log"
         )
     else:
         ard_note = (f" + Ardaman 2009 ({wc.video_well})"
                     if wc.has_ardaman else "")
         title = (
-            f"Well {wc.caliper_well} caliper + SEC ({smoothing}, N={n})"
+            f"Well {wc.caliper_well} caliper + SEC "
+            f"({smoothing}, N={n}, {trial_label})"
             f" × video {wc.video_well}{ard_note}"
         )
 
@@ -521,6 +671,8 @@ def build_all_sec_caliper_video_panels(
     smoothings: tuple[str, ...] = ("savgol", "lowess"),
     n_min: int = 1,
     n_max: int = 10,
+    trial: str = "trial_1",
+    jobs: Optional[list[dict]] = None,
     campaign: str = "2022_02",
     output_dir: Optional[str | Path] = None,
     perpoint_csv: Optional[str | Path] = None,
@@ -530,32 +682,54 @@ def build_all_sec_caliper_video_panels(
     project_root: Optional[Path] = None,
     config: Optional[SecCaliperVideoConfig] = None,
 ) -> list[Path]:
-    """Render the SEC + caliper × video panel for every (well, smoothing, n).
+    """Render the SEC + caliper × video panel for every (well, smoothing, n, trial).
+
+    Two driving modes
+    -----------------
+
+    1. **Jobs mode** (preferred for the thesis chapter) — pass a list of
+       dicts via ``jobs``, each with keys ``well``, ``method``,
+       ``trial``, ``n``. One panel is produced per job, honouring the
+       trial choice made by the user (e.g. via
+       ``config/slopes_jobs_2022_02.yml``). When ``jobs`` is given,
+       ``wells``, ``smoothings``, ``n_min``, ``n_max``, and ``trial``
+       are ignored.
+
+    2. **Legacy grid mode** — pass ``wells`` × ``smoothings`` ×
+       ``[n_min..n_max]``, all rendered with the same ``trial`` (default
+       ``"trial_1"``). Useful for sensitivity sweeps where the trial is
+       held fixed.
 
     Output files are organised one folder per well, under a campaign
-    subfolder (v13)::
+    subfolder (v13). Filenames **always** carry an explicit ``__t{idx}``
+    suffix so two trials at the same N never collide::
 
         results/figures/convergence/sec_caliper_video/<campaign>/
             LRS70D/
-                LRS70D_20220131__savgol__N01.png
-                LRS70D_20220131__savgol__N02.png
+                LRS70D_20220131__savgol__N01__t1.png
                 ...
-                LRS70D_20220131__lowess__N10.png
+                LRS70D_20220131__lowess__N15__t3.png
             AW5D/
                 ...
 
-    Failures on individual (well, smoothing, n) combinations are logged
-    but don't abort the batch — useful when a particular N exceeds the
-    BIC sweep range for some wells but not others.
+    Failures on individual combinations are logged but don't abort the
+    batch — useful when a particular N exceeds the BIC sweep range for
+    some wells but not others.
 
     Parameters
     ----------
     wells : list[str], optional
-        Subset of wells (defaults to all keys of ``WELLS``).
+        (Legacy mode) Subset of wells. Defaults to all keys of ``WELLS``.
     smoothings : tuple[str, ...]
-        Subset of {"savgol", "lowess"}.
+        (Legacy mode) Subset of {"savgol", "lowess"}.
     n_min, n_max : int
-        Inclusive range of N (number of breakpoints) to render.
+        (Legacy mode) Inclusive range of N to render.
+    trial : str, default "trial_1"
+        (Legacy mode) Trial to use for every (well, smoothing, n).
+    jobs : list[dict], optional
+        Jobs mode. Each item must have keys ``well``, ``method``,
+        ``trial``, ``n``. Other keys are ignored. If given, supersedes
+        all four legacy-mode arguments.
     campaign : str
         Field campaign — see ``plot_sec_caliper_video_panel``.
     output_dir : path-like, optional
@@ -571,6 +745,8 @@ def build_all_sec_caliper_video_panels(
     list[Path]
         Absolute paths of PNGs actually written.
     """
+    from karst_analysis.sec.jobs_io import trial_index
+
     if output_dir is None:
         from karst_analysis.io import resolve_figure_dir
         output_dir = resolve_figure_dir(
@@ -580,50 +756,80 @@ def build_all_sec_caliper_video_panels(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    target_wells = wells if wells is not None else list(WELLS.keys())
+    # Build the unified list of (well, method, trial, n) tasks.
+    tasks: list[tuple[str, str, str, int]] = []
+    if jobs is not None:
+        for j in jobs:
+            tasks.append((str(j["well"]), str(j["method"]),
+                          str(j["trial"]), int(j["n"])))
+    else:
+        target_wells = wells if wells is not None else list(WELLS.keys())
+        for w in target_wells:
+            for smoothing in smoothings:
+                for n in range(n_min, n_max + 1):
+                    tasks.append((w, smoothing, trial, n))
+
     written: list[Path] = []
     n_skipped = 0
 
-    for w in target_wells:
+    # Group tasks by well for nicer console output.
+    current_well: Optional[str] = None
+    date_cache: dict[tuple[str, str], str] = {}  # (well, smoothing) -> date
+
+    for w, smoothing, trial_name, n in tasks:
         if w not in WELLS:
             print(f"[{w}]  unknown well — skipping")
+            n_skipped += 1
             continue
-        well_dir = out_dir / w
-        well_dir.mkdir(parents=True, exist_ok=True)
-        print(f"\n[{w}]")
-        for smoothing in smoothings:
-            # Resolve the date suffix from a sample SEC profile filename
-            # — only used to derive the date stamp in the output filename.
+        if w != current_well:
+            print(f"\n[{w}]")
+            current_well = w
+
+        # Resolve the date suffix from a sample SEC profile filename
+        # — only used to derive the date stamp in the output filename.
+        cache_key = (w, smoothing)
+        if cache_key not in date_cache:
             try:
                 _sec = load_sec_profile(
                     well_id=w, campaign=campaign, smoothing=smoothing,
                     project_root=project_root,
                 )
-                date_stamp = _sec["source_file"].iloc[0].split("__")[0].split("_")[-1]
+                date_cache[cache_key] = (
+                    _sec["source_file"].iloc[0].split("__")[0].split("_")[-1]
+                )
             except Exception as exc:
                 print(f"  ✗ ({smoothing}) cannot resolve date: {exc!r}")
+                n_skipped += 1
                 continue
+        date_stamp = date_cache[cache_key]
 
-            for n in range(n_min, n_max + 1):
-                fig_path = well_dir / f"{w}_{date_stamp}__{smoothing}__N{n:02d}.png"
-                try:
-                    fig = plot_sec_caliper_video_panel(
-                        w, smoothing=smoothing, n=n, campaign=campaign,
-                        perpoint_csv=perpoint_csv,
-                        video_xlsx=video_xlsx,
-                        ardaman_csv=(ardaman_csv if WELLS[w].has_ardaman else None),
-                        master_caliper_csv=master_caliper_csv,
-                        project_root=project_root,
-                        config=config,
-                        output_path=fig_path,
-                    )
-                    plt.close(fig)
-                    written.append(fig_path)
-                    print(f"  ✓ N={n:02d} {smoothing}")
-                except Exception as exc:
-                    n_skipped += 1
-                    msg = str(exc).splitlines()[0][:80]
-                    print(f"  · N={n:02d} {smoothing}  skipped: {msg}")
+        well_dir = out_dir / w
+        well_dir.mkdir(parents=True, exist_ok=True)
+        t_idx = trial_index(trial_name)
+        fig_name = (
+            f"{w}_{date_stamp}__{smoothing}__N{n:02d}__t{t_idx}.png"
+        )
+        fig_path = well_dir / fig_name
+
+        try:
+            fig = plot_sec_caliper_video_panel(
+                w, smoothing=smoothing, n=n, trial=trial_name,
+                campaign=campaign,
+                perpoint_csv=perpoint_csv,
+                video_xlsx=video_xlsx,
+                ardaman_csv=(ardaman_csv if WELLS[w].has_ardaman else None),
+                master_caliper_csv=master_caliper_csv,
+                project_root=project_root,
+                config=config,
+                output_path=fig_path,
+            )
+            plt.close(fig)
+            written.append(fig_path)
+            print(f"  ✓ N={n:02d} {smoothing} {trial_name}")
+        except Exception as exc:
+            n_skipped += 1
+            msg = str(exc).splitlines()[0][:80]
+            print(f"  · N={n:02d} {smoothing} {trial_name}  skipped: {msg}")
 
     print(f"\n{len(written)} panel(s) written, {n_skipped} skipped.")
     return written

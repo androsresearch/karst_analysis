@@ -1,0 +1,3 @@
+transect,role,depth_bgl_m,depth_bgl_ci_lo_m,depth_bgl_ci_hi_m,log_sensitivity,factor_implied,z_r2_m,source_inversion,inversion_path
+T48,breakpoint_1,3.8324,2.5386,5.7855,2.9487,0.007525391339566465,-3.8324,combined_flat,simulations/T48/combined_flat/inversion.py
+T48,breakpoint_2,12.4529,11.2011,13.8446,1.331,0.00018146336217998225,-12.4529,combined_flat,simulations/T48/combined_flat/inversion.py

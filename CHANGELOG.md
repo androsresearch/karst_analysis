@@ -4,6 +4,76 @@ All notable changes to `karst_analysis` are documented here. Older
 versions (v1–v17.1) shipped as zip patches with PowerShell installers;
 their internal notes live under `backups/`.
 
+## v17.5 — 2026-05-31
+
+### feat: SEC breakpoints summary CSV (cross-check table)
+
+#### What changed
+
+New script `scripts/build_sec_breakpoints_summary.py` produces a
+long-format CSV with one row per breakpoint, listing both the
+water-table depth (native frame of the JSONs and slopes CSVs) and
+the BGL depth (= `depth_wt_m + vadose_m`), plus MZ flags from the
+slopes CSV.
+
+For each canonical (well, method, trial, N) job listed in
+`config/slopes_jobs_<campaign>.yml`, the script:
+
+1. Reads the breakpoints JSON to get the N water-table depths.
+2. Reads the slopes CSV to get `is_top_of_mixing` /
+   `is_bottom_of_mixing` flags.
+3. Looks up vadose-zone thickness for the well from
+   `data/metadata/wells.csv` (campaign-matched).
+4. Cross-checks that JSON and slopes CSV describe the same series
+   in WT datum (max disagreement < 1e-3 m).
+5. Emits one row per BP with `well_id, campaign, date, method,
+   trial, n_breakpoints, bp_idx, depth_wt_m, vadose_m,
+   depth_bgl_m, is_top_mz, is_bot_mz`.
+
+Output default: `results/sec_breakpoints_summary_<campaign>.csv`.
+For campaign 2022_02 the snapshot is 75 rows (5 wells × 15 BPs).
+
+#### Why
+
+Two consumers needed a single cross-check table:
+
+1. Thesis text. Specific BGL values are cited (LRS70D TOP MZ at
+   9.11 m BGL, BOT MZ at 13.30 m BGL, etc.). Reading them from
+   multiple JSONs + slopes CSVs is slow and error-prone; one CSV
+   filtered by `is_top_mz=True` returns the TOP MZ of all wells
+   in one row scan.
+2. Companion fix in `andros_resipy_inversions` v0.1.0 (audit
+   follow-up on BGL-vs-WT). Both repos now point at the same
+   canonical numbers; the andros figures can be visually checked
+   against the rows of this CSV.
+
+The values are derived (script + inputs + commit), not new
+computations. The breakpoints themselves were fitted in earlier
+versions and remain canonical (Invariante 4).
+
+#### What does NOT change
+
+* No re-fit of breakpoints. The JSONs and slopes CSVs under
+  `data/breakpoints/` and `data/slopes/` are read as-is.
+* `data/metadata/wells.csv` is unchanged.
+* No other scripts touched; pure addition.
+
+#### Files added
+
+* `scripts/build_sec_breakpoints_summary.py` — new.
+* `results/sec_breakpoints_summary_2022_02.csv` — new (75 rows,
+  campaign 2022_02 snapshot).
+* `CHANGELOG.md` — this entry.
+
+#### How to regenerate
+
+```
+uv run python scripts/build_sec_breakpoints_summary.py \
+    --jobs config/slopes_jobs_2022_02.yml
+```
+
+---
+
 ## v17.4 — 2026-05-29
 
 ### feat: BIC curves panel — alphabetical layout + fixed N axis to expose non-convergence

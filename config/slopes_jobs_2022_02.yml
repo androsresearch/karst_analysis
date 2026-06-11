@@ -33,12 +33,16 @@ jobs:
   
   - well: LRS69D
     method: lowess
-    trial: trial_3
+    trial: trial_2
     n: 15
-    bot_mz_sec_threshold: 40000
+    bot_mz_sec_threshold: 
+    # NOTE: this trial's slopes CSV was regenerated under
+    # top_mz_sec_threshold=10000 (v17.6). If re-running slopes_batch
+    # against this YAML, add top_mz_sec_threshold: 10000 to this job
+    # or the TOP MZ will fall in the saltwater region.
 
   - well: BW3D
     method: lowess
-    trial: trial_2
+    trial: trial_3
     n: 15
     bot_mz_sec_threshold: 40000

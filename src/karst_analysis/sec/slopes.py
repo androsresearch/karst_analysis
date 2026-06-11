@@ -66,6 +66,7 @@ def compute_slopes(
     breakpoints_df: pd.DataFrame,
     *,
     bot_mz_sec_threshold: float = 40_000.0,
+    top_mz_sec_threshold: float | None = None,
 ) -> pd.DataFrame:
     """Compute chord slopes between consecutive breakpoints.
 
@@ -85,6 +86,20 @@ def compute_slopes(
         (the boolean column stays False on every row), which is honest
         information: that well does not reach established saltwater.
         TOP MZ is unaffected by this threshold.
+    top_mz_sec_threshold : float, optional
+        Maximum SEC value (µS/cm) a breakpoint can have to qualify as
+        the TOP MZ. Restricts the geometric "largest curvature" winner
+        to breakpoints whose ``sec_top`` is strictly below this value,
+        encoding the physical constraint that the upper boundary of
+        the mixing zone must sit close to the freshwater side, not
+        deep inside saltwater. ``None`` (default) disables the
+        constraint and preserves the pre-existing pure-geometry
+        behaviour. When the threshold is active and no interior
+        breakpoint qualifies, raises ``RuntimeError``; for the
+        coastal-aquifer wells in scope every profile has freshwater
+        and a TOP MZ candidate by construction, so unmarked TOP MZ
+        would signal a configuration or data error rather than a
+        legitimate result.
 
     Returns
     -------
@@ -106,8 +121,11 @@ def compute_slopes(
         - ``slope_sign``             : np.sign(slope_log10) as int.
         - ``is_top_of_mixing``       : True for the chord pair whose
                                        ``depth_top`` is the breakpoint
-                                       of largest discrete curvature
-                                       (purely geometric criterion).
+                                       of largest discrete curvature.
+                                       When ``top_mz_sec_threshold`` is
+                                       set, the winner is restricted to
+                                       breakpoints with ``sec_top <
+                                       top_mz_sec_threshold``.
         - ``is_bottom_of_mixing``    : True for the chord pair whose
                                        ``depth_top`` is the breakpoint
                                        of largest discrete curvature
@@ -124,6 +142,9 @@ def compute_slopes(
         If the input DataFrame lacks the required columns.
     AssertionError
         If ``Breakpoint X Position`` is not strictly ascending.
+    RuntimeError
+        If ``top_mz_sec_threshold`` is set and no interior breakpoint
+        satisfies ``sec_top < top_mz_sec_threshold``.
 
     Notes
     -----
@@ -205,7 +226,11 @@ def compute_slopes(
     })
 
     # ── 4) Identify TOP MZ (curvature) and BOT MZ (curvature + threshold) ──
-    out = _mark_mixing_zone(out, bot_mz_sec_threshold=bot_mz_sec_threshold)
+    out = _mark_mixing_zone(
+        out,
+        bot_mz_sec_threshold=bot_mz_sec_threshold,
+        top_mz_sec_threshold=top_mz_sec_threshold,
+    )
 
     return out
 
@@ -235,11 +260,18 @@ def _mark_mixing_zone(
     df: pd.DataFrame,
     *,
     bot_mz_sec_threshold: float,
+    top_mz_sec_threshold: float | None = None,
 ) -> pd.DataFrame:
     """Set is_top_of_mixing / is_bottom_of_mixing.
 
-    TOP MZ: purely geometric — the interior breakpoint with the
-    largest discrete curvature.
+    TOP MZ: largest discrete curvature among interior breakpoints.
+    When ``top_mz_sec_threshold`` is provided, the candidate set is
+    restricted to interior breakpoints whose ``sec_top`` is strictly
+    below the threshold. If no breakpoint qualifies, raises
+    ``RuntimeError`` — for the coastal-aquifer wells in scope every
+    profile is expected to have freshwater and a TOP MZ candidate by
+    construction, so an empty candidate set signals a configuration or
+    data problem rather than a legitimate result.
 
     BOT MZ: geometric AND physical — the interior breakpoint with the
     largest discrete curvature, AMONG those whose SEC ≥ threshold,
@@ -270,9 +302,18 @@ def _mark_mixing_zone(
     if n_pairs == 1:
         # Trivial: only one chord; flag it as both ends.
         idx = df.index[0]
+        sec_top_only = df["sec_top_uS_cm"].iloc[0]
+        if (top_mz_sec_threshold is not None
+                and sec_top_only >= top_mz_sec_threshold):
+            raise RuntimeError(
+                f"No interior breakpoint satisfies sec_top < "
+                f"{top_mz_sec_threshold:g} µS/cm for TOP MZ "
+                f"(profile has only one chord and its sec_top = "
+                f"{sec_top_only:.1f} µS/cm)."
+            )
         df.at[idx, "is_top_of_mixing"] = True
         # BOT only if it meets the threshold
-        if df["sec_top_uS_cm"].iloc[0] >= bot_mz_sec_threshold:
+        if sec_top_only >= bot_mz_sec_threshold:
             df.at[idx, "is_bottom_of_mixing"] = True
         return df
 
@@ -290,6 +331,13 @@ def _mark_mixing_zone(
 
     if n_pairs == 2:
         # 3 breakpoints, one interior at z_bp[1].
+        if (top_mz_sec_threshold is not None
+                and sec_bp[1] >= top_mz_sec_threshold):
+            raise RuntimeError(
+                f"No interior breakpoint satisfies sec_top < "
+                f"{top_mz_sec_threshold:g} µS/cm for TOP MZ "
+                f"(the only interior BP has sec = {sec_bp[1]:.1f} µS/cm)."
+            )
         idx_downstream = df.index[1]
         df.at[idx_downstream, "is_top_of_mixing"] = True
         # BOT only if the interior BP's SEC meets the threshold
@@ -319,9 +367,29 @@ def _mark_mixing_zone(
     interior_idx = np.arange(1, n_bp - 1)
     interior_turning = turning[interior_idx]
 
-    # ── TOP MZ: largest turning angle, no constraint ───────────────────
-    order = np.argsort(-interior_turning, kind="stable")
-    bp_top_mz_idx = int(interior_idx[order[0]])
+    # ── TOP MZ: largest turning angle (optionally restricted to BPs
+    #            with SEC < top_mz_sec_threshold) ─────────────────────
+    if top_mz_sec_threshold is not None:
+        top_eligible_mask = sec_bp[interior_idx] < top_mz_sec_threshold
+        if not top_eligible_mask.any():
+            # Defensive: not expected on the coastal-aquifer wells in
+            # scope, where every profile has a freshwater regime by
+            # construction. If this fires, check the breakpoint trial
+            # picked (it may have skipped the freshwater knees) or the
+            # threshold value passed in.
+            raise RuntimeError(
+                f"No interior breakpoint satisfies sec_top < "
+                f"{top_mz_sec_threshold:g} µS/cm for TOP MZ "
+                f"(interior sec_top values: "
+                f"{sec_bp[interior_idx].round(1).tolist()})."
+            )
+        top_local_positions = np.where(top_eligible_mask)[0]
+        top_turning = interior_turning[top_local_positions]
+        top_order = np.argsort(-top_turning, kind="stable")
+        bp_top_mz_idx = int(interior_idx[top_local_positions[top_order[0]]])
+    else:
+        order = np.argsort(-interior_turning, kind="stable")
+        bp_top_mz_idx = int(interior_idx[order[0]])
 
     # ── BOT MZ: largest turning angle among BPs with SEC ≥ threshold,
     #            excluding the BP already chosen as TOP MZ ──────────────

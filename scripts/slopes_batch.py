@@ -122,14 +122,16 @@ def _process_job(
     fig_dir: Path,
     do_plot: bool,
     do_linear: bool,
-    default_threshold: Optional[float] = None,
+    default_bot_threshold: Optional[float] = None,
+    default_top_threshold: Optional[float] = None,
 ) -> dict:
     """Execute one job. Returns a summary row.
 
-    Threshold resolution:
-    - If the job specifies its own ``bot_mz_sec_threshold``, that wins.
+    Threshold resolution (independent for BOT and TOP):
+    - If the job specifies its own threshold, that wins.
     - Else if the YAML root specified a default, use that.
-    - Else fall back to compute_slopes' built-in default (40 000).
+    - Else: BOT falls back to compute_slopes' built-in default (40 000);
+      TOP falls back to ``None`` (legacy behaviour: pure curvature).
     """
     t0 = time.time()
 
@@ -178,14 +180,26 @@ def _process_job(
     bp_df = extract_breakpoints(model)
 
     # Compute slopes + curvature flags
-    # Resolve threshold: per-job > YAML default > compute_slopes default
+    # Resolve BOT threshold: per-job > YAML default > compute_slopes default
     if job.bot_mz_sec_threshold is not None:
-        threshold = job.bot_mz_sec_threshold
-    elif default_threshold is not None:
-        threshold = default_threshold
+        bot_threshold = job.bot_mz_sec_threshold
+    elif default_bot_threshold is not None:
+        bot_threshold = default_bot_threshold
     else:
-        threshold = 40_000.0  # matches compute_slopes default
-    slopes = compute_slopes(bp_df, bot_mz_sec_threshold=threshold)
+        bot_threshold = 40_000.0  # matches compute_slopes default
+    # Resolve TOP threshold: per-job > YAML default > None (disabled,
+    # preserves legacy pure-curvature behaviour).
+    if job.top_mz_sec_threshold is not None:
+        top_threshold = job.top_mz_sec_threshold
+    elif default_top_threshold is not None:
+        top_threshold = default_top_threshold
+    else:
+        top_threshold = None
+    slopes = compute_slopes(
+        bp_df,
+        bot_mz_sec_threshold=bot_threshold,
+        top_mz_sec_threshold=top_threshold,
+    )
 
     # Persist CSV
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -282,17 +296,18 @@ def _process_job(
     # Deferred until we settle on the schema for slopes runs.
 
     return {
-        "well":          job.well,
-        "date":          date,
-        "method":        job.method,
-        "trial":         job.trial,
-        "n":             job.n,
-        "threshold":     threshold,
-        "csv":           csv_out.name,
-        "n_figures":     len(fig_paths),
-        "top_mz_depth":  top_z,
-        "bot_mz_depth":  bot_z,
-        "elapsed_s":     elapsed,
+        "well":           job.well,
+        "date":           date,
+        "method":         job.method,
+        "trial":          job.trial,
+        "n":              job.n,
+        "bot_threshold":  bot_threshold,
+        "top_threshold":  top_threshold,
+        "csv":            csv_out.name,
+        "n_figures":      len(fig_paths),
+        "top_mz_depth":   top_z,
+        "bot_mz_depth":   bot_z,
+        "elapsed_s":      elapsed,
     }
 
 
@@ -314,7 +329,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.error(f"Jobs file does not exist: {args.jobs}")
         return 1
 
-    campaign, default_threshold, jobs = _load_jobs_file(args.jobs)
+    campaign, default_bot_threshold, default_top_threshold, jobs = \
+        _load_jobs_file(args.jobs)
 
     bp_dir   = args.bp_dir   or Path(f"data/breakpoints/{campaign}")
     proc_dir = args.proc_dir or Path(f"data/processed/sec/{campaign}")
@@ -332,11 +348,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"  proc-dir  : {proc_dir}")
     print(f"  out-dir   : {out_dir}")
     print(f"  fig-dir   : {fig_dir}")
-    threshold_display = (
-        f"{default_threshold} µS/cm" if default_threshold is not None
+    bot_display = (
+        f"{default_bot_threshold} µS/cm" if default_bot_threshold is not None
         else "40000 µS/cm (compute_slopes default)"
     )
-    print(f"  threshold : {threshold_display}  (BOT MZ; jobs may override)")
+    top_display = (
+        f"{default_top_threshold} µS/cm" if default_top_threshold is not None
+        else "disabled (legacy pure-curvature TOP MZ)"
+    )
+    print(f"  BOT thr.  : {bot_display}  (jobs may override)")
+    print(f"  TOP thr.  : {top_display}  (jobs may override)")
     print(f"  plot      : {'NO' if args.no_plot else 'YES'}")
     if not args.no_plot:
         print(f"  linear    : {'NO' if args.no_linear else 'YES'}")
@@ -357,7 +378,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 out_dir=out_dir, fig_dir=fig_dir,
                 do_plot=not args.no_plot,
                 do_linear=not args.no_linear,
-                default_threshold=default_threshold,
+                default_bot_threshold=default_bot_threshold,
+                default_top_threshold=default_top_threshold,
             )
             rows.append(row)
             top_str = (

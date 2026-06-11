@@ -1,0 +1,63 @@
+﻿# LRS69D — regenerate slopes for all 6 trials (lowess t1/t2/t3 +
+# savgol t1/t2/t3) under top_mz_sec_threshold = 10000.
+#
+# Context: the canonical pick for LRS69D was lowess-t3, but its
+# TOP MZ sat too deep (sec_top above 10k µS/cm — already in the
+# mixing region, not the freshwater knee). Adding the physical
+# constraint sec_top < 10000 to the geometric curvature criterion
+# pushes TOP MZ back into the freshwater side, mirroring the
+# asymmetric constraint already used for BOT MZ.
+#
+# Cero re-corrida estocástica: all breakpoints come from the JSONs
+# already in data/breakpoints/2022_02/.
+#
+# This file lives alongside slopes_jobs_2022_02.yml. The latter
+# remains the canonical job list for the campaign; this one is
+# the exploratory regeneration of LRS69D's six trials. Once the
+# right trial is picked, slopes_jobs_2022_02.yml gets updated
+# separately.
+
+campaign: "2022_02"
+
+jobs:
+  - well: LRS69D
+    method: lowess
+    trial: trial_1
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000
+
+  - well: LRS69D
+    method: lowess
+    trial: trial_2
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000
+
+  - well: LRS69D
+    method: lowess
+    trial: trial_3
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000
+
+  - well: LRS69D
+    method: savgol
+    trial: trial_1
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000
+
+  - well: LRS69D
+    method: savgol
+    trial: trial_2
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000
+
+  - well: LRS69D
+    method: savgol
+    trial: trial_3
+    n: 15
+    bot_mz_sec_threshold: 40000
+    top_mz_sec_threshold: 10000

@@ -20,6 +20,9 @@ YAML schema
     campaign: "2022_02"
     # Optional global default for BOT-MZ SEC threshold (µS/cm).
     bot_mz_sec_threshold: 40000
+    # Optional global default for TOP-MZ SEC threshold (µS/cm).
+    # Omit to disable the constraint (legacy behaviour: pure curvature).
+    top_mz_sec_threshold: 10000
 
     jobs:
       - well: LRS70D
@@ -27,6 +30,7 @@ YAML schema
         trial: trial_3        # "trial_1", "trial_2", ... or "best_bic"
         n: 15                 # number of breakpoints
         bot_mz_sec_threshold: 40000   # optional per-job override
+        top_mz_sec_threshold: 10000   # optional per-job override
 
 Backwards compatibility
 -----------------------
@@ -68,12 +72,17 @@ class Job:
         Per-job override for the BOT-MZ SEC threshold (µS/cm). ``None``
         means "fall back to the YAML default, then to the
         ``compute_slopes`` built-in default".
+    top_mz_sec_threshold : float, optional
+        Per-job override for the TOP-MZ SEC threshold (µS/cm). ``None``
+        means "fall back to the YAML default, then to disabled
+        (legacy pure-curvature behaviour)".
     """
     well: str
     method: str
     trial: str
     n: int
     bot_mz_sec_threshold: Optional[float] = None
+    top_mz_sec_threshold: Optional[float] = None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -116,7 +125,7 @@ def _normalise_campaign(value) -> str:
 
 def load_jobs_file(
     path: Path | str,
-) -> tuple[str, Optional[float], list[Job]]:
+) -> tuple[str, Optional[float], Optional[float], list[Job]]:
     """Parse a YAML jobs file.
 
     Parameters
@@ -126,12 +135,15 @@ def load_jobs_file(
 
     Returns
     -------
-    (campaign, default_threshold, jobs)
+    (campaign, default_bot_threshold, default_top_threshold, jobs)
         - ``campaign`` : canonical ``'YYYY_MM'`` string.
-        - ``default_threshold`` : optional global default for
+        - ``default_bot_threshold`` : optional global default for
           ``bot_mz_sec_threshold``; ``None`` if absent at YAML root.
-        - ``jobs`` : list of :class:`Job` instances. Per-job threshold
-          is on ``bot_mz_sec_threshold`` if specified, else ``None``.
+        - ``default_top_threshold`` : optional global default for
+          ``top_mz_sec_threshold``; ``None`` if absent at YAML root.
+        - ``jobs`` : list of :class:`Job` instances. Per-job thresholds
+          are on ``bot_mz_sec_threshold`` / ``top_mz_sec_threshold`` if
+          specified, else ``None``.
 
     Raises
     ------
@@ -152,9 +164,13 @@ def load_jobs_file(
         raise ValueError(f"{path}: missing 'campaign' key.")
     campaign = _normalise_campaign(raw_campaign)
 
-    default_threshold = cfg.get("bot_mz_sec_threshold")
-    if default_threshold is not None:
-        default_threshold = float(default_threshold)
+    default_bot_threshold = cfg.get("bot_mz_sec_threshold")
+    if default_bot_threshold is not None:
+        default_bot_threshold = float(default_bot_threshold)
+
+    default_top_threshold = cfg.get("top_mz_sec_threshold")
+    if default_top_threshold is not None:
+        default_top_threshold = float(default_top_threshold)
 
     jobs_raw = cfg.get("jobs", [])
     if not jobs_raw:
@@ -170,15 +186,19 @@ def load_jobs_file(
                 f"{path} job #{i}: method must be 'savgol' or 'lowess'; "
                 f"got {j['method']!r}."
             )
-        per_job_threshold = j.get("bot_mz_sec_threshold")
-        if per_job_threshold is not None:
-            per_job_threshold = float(per_job_threshold)
+        per_job_bot = j.get("bot_mz_sec_threshold")
+        if per_job_bot is not None:
+            per_job_bot = float(per_job_bot)
+        per_job_top = j.get("top_mz_sec_threshold")
+        if per_job_top is not None:
+            per_job_top = float(per_job_top)
         jobs.append(Job(
             well=str(j["well"]),
             method=str(j["method"]),
             trial=str(j["trial"]),
             n=int(j["n"]),
-            bot_mz_sec_threshold=per_job_threshold,
+            bot_mz_sec_threshold=per_job_bot,
+            top_mz_sec_threshold=per_job_top,
         ))
 
-    return campaign, default_threshold, jobs
+    return campaign, default_bot_threshold, default_top_threshold, jobs

@@ -255,3 +255,120 @@ def test_no_tie_no_warning():
         warnings.simplefilter("error")
         out = compute_slopes(bp, bot_mz_sec_threshold=0.0)
     assert len(out) == 5
+
+
+# ────────────────────────────────────────────────────────────────────
+#  top_mz_sec_threshold: physical constraint on TOP MZ
+# ────────────────────────────────────────────────────────────────────
+def test_top_threshold_default_none_preserves_legacy_behaviour():
+    """Without top_mz_sec_threshold the result must match the prior
+    pure-curvature TOP MZ exactly (regression guard for §5.3 of the
+    working style)."""
+    bp = _make_bp_df(
+        [1.088875, 2.331340, 3.223473, 3.920148, 4.540055, 5.444627,
+         7.179577, 8.297417, 9.053570, 10.839219, 11.799181, 12.697619,
+         20.861298, 23.734505, 25.585277],
+        [3.343077, 3.468078, 3.638172, 3.727791, 3.742533, 3.757014,
+         3.771367, 3.796156, 4.050722, 4.270141, 4.590433, 4.679732,
+         4.699115, 4.702587, 4.702990],
+    )
+    out_legacy = compute_slopes(bp)
+    out_none = compute_slopes(bp, top_mz_sec_threshold=None)
+    assert (out_legacy["is_top_of_mixing"].to_numpy()
+            == out_none["is_top_of_mixing"].to_numpy()).all()
+    assert (out_legacy["is_bottom_of_mixing"].to_numpy()
+            == out_none["is_bottom_of_mixing"].to_numpy()).all()
+
+
+def test_top_threshold_restricts_to_freshwater_side():
+    """Profile whose highest-curvature interior BP sits in saltwater.
+    Without threshold TOP MZ falls there. With a freshwater threshold,
+    TOP MZ must move to a shallower, freshwater BP."""
+    # Synthetic: gentle freshwater plateau with a slight knee at BP2,
+    # then a sharper knee deep in saltwater at BP4.
+    bp = _make_bp_df(
+        [0.0, 2.0, 4.0, 8.0, 12.0],
+        # sec: 1000, 1995, 39811, 50119, 50119
+        [3.00, 3.30, 4.60, 4.70, 4.70],
+    )
+    # Legacy: largest curvature is at BP4 (very sharp knee in saltwater)
+    out_legacy = compute_slopes(bp, bot_mz_sec_threshold=40_000.0)
+    top_legacy = out_legacy.loc[out_legacy["is_top_of_mixing"]].iloc[0]
+    assert top_legacy["sec_top_uS_cm"] > 10_000  # confirms saltwater pick
+
+    # With 10k threshold: only BP2 (sec=1995) and BP3 (sec=39811?... no,
+    # 10^4.6=39811 ≥ 10k) qualify. BP3 disqualified too → only BP2.
+    out_thr = compute_slopes(
+        bp,
+        bot_mz_sec_threshold=40_000.0,
+        top_mz_sec_threshold=10_000.0,
+    )
+    top_thr = out_thr.loc[out_thr["is_top_of_mixing"]].iloc[0]
+    assert top_thr["sec_top_uS_cm"] < 10_000
+    assert top_thr["depth_top"] == pytest.approx(2.0)  # BP2
+
+
+def test_top_threshold_no_eligible_raises_runtimeerror():
+    """If every interior BP has sec ≥ threshold, raise RuntimeError.
+    Defensive guard for the coastal-aquifer wells in scope."""
+    # All interior BPs at sec ~50000 (above any reasonable freshwater
+    # threshold).
+    bp = _make_bp_df(
+        [0.0, 1.0, 2.0, 3.0, 4.0],
+        [4.70, 4.71, 4.72, 4.73, 4.74],
+    )
+    with pytest.raises(RuntimeError, match="No interior breakpoint satisfies"):
+        compute_slopes(bp, top_mz_sec_threshold=10_000.0)
+
+
+def test_top_threshold_n_pairs_one_validates():
+    """Two-BP case (1 chord, no interior). When threshold is active and
+    the single sec_top exceeds it, raise."""
+    bp = _make_bp_df([2.0, 4.0], [4.7, 4.71])  # sec_top ~= 50000
+    with pytest.raises(RuntimeError, match="No interior breakpoint satisfies"):
+        compute_slopes(bp, top_mz_sec_threshold=10_000.0)
+
+
+def test_top_threshold_n_pairs_one_passes():
+    """Two-BP case, threshold active, sec_top below threshold → OK."""
+    bp = _make_bp_df([2.0, 4.0], [3.0, 3.5])  # sec_top=1000
+    out = compute_slopes(bp, top_mz_sec_threshold=10_000.0)
+    assert bool(out.iloc[0]["is_top_of_mixing"]) is True
+
+
+def test_top_threshold_n_pairs_two_validates():
+    """Three-BP case (2 chords, one interior). Threshold checks the
+    interior BP."""
+    # Interior BP at sec ~50000
+    bp = _make_bp_df([0.0, 1.0, 2.0], [3.0, 4.7, 4.71])
+    with pytest.raises(RuntimeError, match="No interior breakpoint satisfies"):
+        compute_slopes(bp, top_mz_sec_threshold=10_000.0)
+
+
+def test_both_thresholds_active_independent():
+    """TOP and BOT thresholds operate independently and can pick
+    different BPs."""
+    # 6 BPs (4 interior): freshwater plateau, freshwater knee, mid,
+    # near-saltwater knee, deep saltwater, saltwater plateau.
+    # sec at BPs (10^y): 1000, 1995, 6310, 39811, 50119, 50119
+    # Interior BPs are indices 1..4: 1995, 6310, 39811, 50119.
+    # Of those, only sec≥40k: index 4 (50119). So BOT picks BP5.
+    # Of those, only sec<10k: indices 1 and 2 (1995, 6310). TOP picks
+    # whichever has higher curvature.
+    bp = _make_bp_df(
+        [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        [3.0, 3.30, 3.80, 4.60, 4.70, 4.70],
+    )
+    out = compute_slopes(
+        bp,
+        bot_mz_sec_threshold=40_000.0,
+        top_mz_sec_threshold=10_000.0,
+    )
+    top_row = out.loc[out["is_top_of_mixing"]].iloc[0]
+    bot_row = out.loc[out["is_bottom_of_mixing"]].iloc[0]
+    # TOP must be at a BP with sec < 10k
+    assert top_row["sec_top_uS_cm"] < 10_000
+    # BOT must be at a BP with sec ≥ 40k
+    assert bot_row["sec_top_uS_cm"] >= 40_000
+    # And TOP must be shallower than BOT
+    assert top_row["depth_top"] < bot_row["depth_top"]

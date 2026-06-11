@@ -4,6 +4,85 @@ All notable changes to `karst_analysis` are documented here. Older
 versions (v1–v17.1) shipped as zip patches with PowerShell installers;
 their internal notes live under `backups/`.
 
+## v17.6 — 2026-06-10
+
+### feat: optional `top_mz_sec_threshold` on `compute_slopes`
+
+#### What changed
+
+`karst_analysis.sec.slopes.compute_slopes` gains a new keyword-only
+parameter `top_mz_sec_threshold: float | None = None`. When provided,
+TOP MZ selection is restricted to interior breakpoints whose
+`sec_top_uS_cm` is **strictly less than** the threshold (in µS/cm); the
+largest-curvature winner is chosen among those. Default `None`
+preserves the pre-existing pure-curvature behaviour exactly.
+
+If the threshold is active and no interior breakpoint qualifies,
+`compute_slopes` raises `RuntimeError`. This is defensive: every
+coastal-aquifer well in the current study has a freshwater regime by
+construction, so an empty candidate set signals a configuration or
+data problem rather than a legitimate result.
+
+The `Job` dataclass in `karst_analysis.sec.jobs_io` gains a parallel
+`top_mz_sec_threshold: Optional[float] = None` field. The YAML jobs
+schema now accepts `top_mz_sec_threshold` at the root (global default)
+and per-job (override). Missing both means the threshold stays
+disabled.
+
+`scripts/slopes_batch.py` resolves the TOP threshold with the same
+precedence as BOT: per-job > YAML root default > `None`. The summary
+row gained `top_threshold` alongside `bot_threshold` (formerly
+`threshold`).
+
+#### Why
+
+Without the threshold, TOP MZ is purely geometric — the breakpoint
+with the largest turning angle wins regardless of its SEC. For most
+wells the curvature winner naturally sits near the freshwater
+asymptote and that's fine. For LRS69D some trials elect a TOP MZ deep
+in the mixing region (sec ≫ 10k µS/cm), which is not the upper
+boundary of the freshwater→saltwater transition. Mirroring the
+asymmetric physical constraint already in place for BOT MZ
+(`sec ≥ 40k`), TOP MZ now accepts an opt-in `sec < threshold` filter.
+
+#### Breaking changes
+
+- **`karst_analysis.sec.jobs_io.load_jobs_file`** return signature
+  changed from `(campaign, default_threshold, jobs)` to
+  `(campaign, default_bot_threshold, default_top_threshold, jobs)`.
+  Internal API; the only caller is `scripts/slopes_batch.py`, updated
+  in this release.
+- **`scripts/slopes_batch.py`** internal `_process_job` parameter
+  `default_threshold` renamed to `default_bot_threshold`, new optional
+  `default_top_threshold` added. The summary row key `threshold` is
+  replaced by `bot_threshold` + `top_threshold`. The console header
+  prints two rows (`BOT thr.` / `TOP thr.`) instead of one.
+
+Outputs from job files that don't mention `top_mz_sec_threshold` are
+**byte-identical to v17.5**: same TOP MZ pick, same BOT MZ pick, same
+columns, same numbers. The 17 pre-existing `tests/test_slopes.py`
+cases still pass unchanged.
+
+#### What was verified
+
+- All 17 prior `test_slopes.py` cases pass without modification,
+  confirming default-`None` preserves legacy behaviour.
+- 7 new tests cover: default-None regression guard, threshold actually
+  restricts to freshwater BPs, no-eligible raises `RuntimeError`,
+  n_pairs∈{1,2} edge cases validate, both thresholds active
+  independently.
+- Inspected real LRS69D breakpoint JSONs (lowess and savgol, all 3
+  trials) to confirm structure round-trip via `rebuild_model`.
+
+#### Known issues
+
+- Slopes CSVs and figures for LRS69D in `data/slopes/2022_02/` and
+  `results/figures/slopes/2022_02/LRS69D/` were computed under v17.5
+  (no TOP threshold). Regeneration with `top_mz_sec_threshold: 10000`
+  is the next operational step (separate commit).
+
+---
+
 ## v17.5 — 2026-05-31
 
 ### feat: SEC breakpoints summary CSV (cross-check table)

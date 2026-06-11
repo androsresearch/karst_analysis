@@ -180,7 +180,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.error(f"Jobs file does not exist: {args.jobs}")
         return 1
 
-    campaign, _default_threshold, jobs = _load_jobs_file(args.jobs)
+    campaign, _default_bot_threshold, _default_top_threshold, jobs = _load_jobs_file(args.jobs)
 
     bp_dir     = args.bp_dir     or Path(f"data/breakpoints/{campaign}")
     slopes_dir = args.slopes_dir or Path(f"data/slopes/{campaign}")

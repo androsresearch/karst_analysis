@@ -61,6 +61,9 @@ working_style.md
 throwaways/
 scratch/
 
+# Fiona shared files
+data/fiona/
+
 # ────────────────────────────────────────────────────────────────────
 # Project — what TO keep (whitelist overrides for clarity)
 # ────────────────────────────────────────────────────────────────────

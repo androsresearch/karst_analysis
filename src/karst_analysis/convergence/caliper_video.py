@@ -230,7 +230,7 @@ class PanelConfig:
     base_figsize: tuple = (13, 14)
     width_ratio: tuple = (1.0, 3.2)
     note_wrap: int = 110
-    note_fontsize: float = 8.5
+    note_fontsize: float = 10.5
     note_x: float = 0.05
     leader_color: str = "#888888"
     leader_lw: float = 0.55
@@ -243,6 +243,33 @@ class PanelConfig:
     ardaman_color_cond: str = "#0f7a4d"
     auto_height_factor: float = 0.30
     auto_height_safety:  float = 1.50
+
+    # ── v5.2 additions ──────────────────────────────────────────────
+    # All three default to the legacy behaviour (Rule 5.3: a new option
+    # preserves the previous output unless explicitly opted in).
+    #
+    # drop_conductivity: when True, Ardaman in-situ-conductivity entries
+    #     (kind == "ardaman_cond", the green annotations) are removed
+    #     from the right panel. Lithology (blue) and video notes (black)
+    #     are unaffected. Default False = legacy (conductivity shown).
+    drop_conductivity: bool = False
+    #
+    # group_boundary_bgl_m: depth (m BGL) of the Group I / Group II
+    #     boundary, drawn as a horizontal reference line and used to
+    #     decide which group legend entries appear on each half.
+    #     DESIGN PARAMETER, not data-derived: hand-set by Mariana from
+    #     the Ardaman 2009 report and recorded in thesis table
+    #     \label{tab:ardaman_groups}. None = no line, no group legend
+    #     (legacy).
+    group_boundary_bgl_m: Optional[float] = None
+    group_line_color: str = "#333333"
+    group_line_lw: float = 1.6
+    group_legend_fontsize: float = 17.0   # "large font" group legend
+    #
+    # split_depth: when True, the well is rendered as two figures split
+    #     at the geometric midpoint (total depth / 2): an upper half and
+    #     a lower half. Default False = single figure (legacy).
+    split_depth: bool = False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -271,13 +298,20 @@ def plot_caliper_video_panel(
     config : PanelConfig, optional
         Override visual parameters.
     output_path : path-like, optional
-        If given, saves the figure as PNG.
+        If given, saves the figure as PNG. When ``cfg.split_depth`` is
+        True the well is rendered as two figures; the upper-half file
+        keeps ``output_path`` stem with ``_top`` appended and the lower
+        half with ``_bottom`` (e.g. ``AW6D_caliper_videolog_panel.png``
+        -> ``..._top.png`` and ``..._bottom.png``).
     sat_cm : float, default 32.5
         Caliper saturation level (drawn as a faint vertical reference).
 
     Returns
     -------
     matplotlib.figure.Figure
+        The single figure (legacy mode). When ``cfg.split_depth`` is
+        True, returns the upper-half figure; both halves are still
+        written to disk if ``output_path`` is given.
     """
     cfg = config or PanelConfig()
     if well_id not in WELLS:
@@ -329,22 +363,17 @@ def plot_caliper_video_panel(
         if parts else pd.DataFrame()
     )
 
-    # ── 3) Figure size scales with number of entries ─────────────────
-    n_entries = len(entries)
-    base_w, base_h = cfg.base_figsize
-    needed_h = cfg.auto_height_factor * cfg.auto_height_safety * n_entries
-    fig_h = max(base_h, needed_h)
-    figsize = (base_w, fig_h)
+    # ── 2b) Drop Ardaman in-situ-conductivity (green) if requested ──
+    # Mariana's director considers the conductivity annotations
+    # unnecessary. Lithology (blue) and video notes (black) are kept.
+    if cfg.drop_conductivity and not entries.empty:
+        entries = (entries[entries["kind"] != "ardaman_cond"]
+                   .reset_index(drop=True))
 
-    fig, (ax_cal, ax_note) = plt.subplots(
-        1, 2, figsize=figsize, sharey=True,
-        gridspec_kw=dict(width_ratios=cfg.width_ratio, wspace=0.02),
-    )
-
-    # ── 4) Y-limits from union of all sources ───────────────────────
-    # In BGL-positive convention, y_min ~ 0 (surface) and y_max is
-    # the deepest point. The axis is inverted afterwards so 0 ends
-    # up at the top of the figure.
+    # ── 2c) Depth window for this well (used for the split midpoint) ─
+    # y_min ~ surface, y_max ~ deepest sample (BGL-positive). Mirror the
+    # same union the single-figure path used so the split midpoint and
+    # the legacy y-limits agree.
     ymin_c = [cal_df["depth_m"].min()]
     ymax_c = [cal_df["depth_m"].max()]
     if not entries.empty:
@@ -356,6 +385,97 @@ def plot_caliper_video_panel(
             ymax_c.append(float(np.nanmax(entries["depth_bot_bgl_m"])))
     y_min = min(ymin_c) - 0.8
     y_max = max(ymax_c) + 0.8
+
+    common = dict(
+        wc=wc, cfg=cfg, perpoint_df=perpoint_df, cal_df=cal_df,
+        entries=entries, companions=companions, sat_cm=sat_cm,
+    )
+
+    # ── Legacy single-figure mode ───────────────────────────────────
+    if not cfg.split_depth:
+        return _render_one(
+            y_lo=y_min, y_hi=y_max,
+            output_path=output_path,
+            half="single",
+            **common,
+        )
+
+    # ── Split mode: two figures at the geometric midpoint ───────────
+    # The midpoint is purely geometric (total depth / 2), independent of
+    # the Group I/II boundary. Upper half = [y_min, mid], lower half =
+    # [mid, y_max].
+    mid = 0.5 * (y_min + y_max)
+    top_out, bot_out = _split_output_paths(output_path)
+    fig_top = _render_one(
+        y_lo=y_min, y_hi=mid, output_path=top_out, half="top", **common,
+    )
+    fig_bot = _render_one(
+        y_lo=mid, y_hi=y_max, output_path=bot_out, half="bottom", **common,
+    )
+    # Return the upper-half figure for API continuity; both are on disk.
+    plt.close(fig_bot)
+    return fig_top
+
+
+def _split_output_paths(output_path):
+    """Return (top_path, bottom_path) derived from ``output_path``.
+
+    ``AW6D_caliper_videolog_panel.png`` ->
+        (``AW6D_caliper_videolog_panel_top.png``,
+         ``AW6D_caliper_videolog_panel_bottom.png``).
+    Returns (None, None) when ``output_path`` is None.
+    """
+    if output_path is None:
+        return None, None
+    p = Path(output_path)
+    return (p.with_name(f"{p.stem}_top{p.suffix}"),
+            p.with_name(f"{p.stem}_bottom{p.suffix}"))
+
+
+def _render_one(
+    *,
+    wc: "WellConfig",
+    cfg: "PanelConfig",
+    perpoint_df: pd.DataFrame,
+    cal_df: pd.DataFrame,
+    entries: pd.DataFrame,
+    companions: dict,
+    sat_cm: float,
+    y_lo: float,
+    y_hi: float,
+    output_path: Optional[str | Path],
+    half: str,
+) -> plt.Figure:
+    """Render a single figure covering the depth window ``[y_lo, y_hi]``.
+
+    ``half`` is one of ``"single"``, ``"top"``, ``"bottom"`` and only
+    affects which Group legend entries are shown and the title suffix.
+    All depths are BGL-positive; the y-axis is inverted at the end so 0
+    sits at the top.
+    """
+    # Restrict entries to those whose centre falls inside this window so
+    # the right-panel annotations for a half belong to that half.
+    if not entries.empty:
+        m = ((entries["depth_centre_bgl_m"] >= y_lo)
+             & (entries["depth_centre_bgl_m"] <= y_hi))
+        entries = entries[m].reset_index(drop=True)
+
+    # ── 3) Figure size scales with number of entries in THIS window ──
+    n_entries = len(entries)
+    base_w, base_h = cfg.base_figsize
+    needed_h = cfg.auto_height_factor * cfg.auto_height_safety * n_entries
+    fig_h = max(base_h, needed_h)
+    figsize = (base_w, fig_h)
+
+    fig, (ax_cal, ax_note) = plt.subplots(
+        1, 2, figsize=figsize, sharey=True,
+        gridspec_kw=dict(width_ratios=cfg.width_ratio, wspace=0.02),
+    )
+
+    # ── 4) Y-limits are the window passed in ────────────────────────
+    # All depths BGL-positive; the axis is inverted afterwards so 0 ends
+    # up at the top of the figure.
+    y_min, y_max = y_lo, y_hi
     ax_cal.set_ylim(y_min, y_max)
 
     # ── 5) LEFT panel: severity, companions, primary, references ────
@@ -421,8 +541,86 @@ def plot_caliper_video_panel(
                       handlelength=1.5, handleheight=1.0,
                       borderpad=0.4, bbox_to_anchor=(0.0, 1.0))
 
+    # ── 5b) Group I / II boundary line + large-font group legend ────
+    # The boundary depth is a design parameter set by Mariana from the
+    # Ardaman 2009 report (thesis table \label{tab:ardaman_groups}). It
+    # is drawn as a horizontal line on both panels wherever it falls
+    # inside the current depth window. Group I = above the boundary
+    # (shallower), Group II = below it (deeper). Each group label is
+    # shown only on a window where that group is actually visible (no
+    # Group I on a lower half that lies entirely below the boundary).
+    gb = cfg.group_boundary_bgl_m
+    line_in_window = (gb is not None) and (y_min <= gb <= y_max)
+    if line_in_window:
+        # Boundary line on the LEFT panel here; the RIGHT-panel line and
+        # the Group text boxes are drawn after ax_note.set_xlim(0, 1)
+        # below, so their x-coordinates are in the right panel's final
+        # 0..1 data frame.
+        ax_cal.axhline(gb, color=cfg.group_line_color,
+                       lw=cfg.group_line_lw, ls="-", alpha=0.9, zorder=6)
+
     # ── 6) RIGHT panel: notes + leaders + brackets ──────────────────
     ax_note.set_xlim(0, 1)
+
+    # Group boundary line + Group text boxes on the RIGHT panel. Drawn
+    # here (after set_xlim) so x is in the panel's final 0..1 frame.
+    # Director's request: the group names appear as large text boxes at
+    # specific depths, not as a corner legend. A box is shown only when
+    # (a) its depth is inside this window and (b) it is on the correct
+    # side of the boundary for the window. The boxes never overlap each
+    # other or the boundary line because their depths (4.8, 6.3) sit on
+    # opposite sides of the 5.2 boundary by construction.
+    if line_in_window:
+        ax_note.axhline(gb, color=cfg.group_line_color,
+                        lw=cfg.group_line_lw, ls="-", alpha=0.9, zorder=6)
+
+    if gb is not None:
+        # Build the set of "occupied" depth points in this window: note
+        # anchors and the boundary itself. Then, for each side of the
+        # boundary that the window covers, find the largest gap between
+        # consecutive occupied points and centre the group label there.
+        note_anchors = (entries["depth_centre_bgl_m"].to_numpy()
+                        if not entries.empty else np.array([]))
+
+        def _largest_gap(lo, hi):
+            """Return the midpoint of the widest free vertical slot in
+            [lo, hi], avoiding existing note anchors. Returns None if
+            the interval is degenerate."""
+            if hi - lo <= 0.05:
+                return None
+            inside = note_anchors[(note_anchors > lo) & (note_anchors < hi)]
+            pts = np.concatenate(([lo], np.sort(inside), [hi]))
+            gaps = np.diff(pts)
+            k = int(np.argmax(gaps))
+            return 0.5 * (pts[k] + pts[k + 1])
+
+        def _group_box(depth, text):
+            ax_note.text(
+                0.98, depth, text,
+                ha="right", va="center",
+                fontsize=cfg.group_legend_fontsize,
+                fontweight="bold", color=cfg.group_line_color, zorder=7,
+                bbox=dict(boxstyle="round,pad=0.45",
+                          facecolor="white", edgecolor=cfg.group_line_color,
+                          linewidth=1.4),
+            )
+
+        # Group I: window slice shallower than gb (and inside [y_min, y_max]).
+        lo_I = y_min
+        hi_I = min(gb, y_max)
+        if hi_I > lo_I:
+            d = _largest_gap(lo_I, hi_I)
+            if d is not None:
+                _group_box(d, "Group I")
+
+        # Group II: window slice deeper than gb.
+        lo_II = max(gb, y_min)
+        hi_II = y_max
+        if hi_II > lo_II:
+            d = _largest_gap(lo_II, hi_II)
+            if d is not None:
+                _group_box(d, "Group II")
+
     ax_note.tick_params(axis="x", which="both", bottom=False, labelbottom=False)
     ax_note.tick_params(axis="y", which="both", left=False, labelleft=False)
     for spine in ("top", "right", "bottom"):
@@ -499,7 +697,9 @@ def plot_caliper_video_panel(
 
     right_label = "Video-log observations"
     if wc.has_ardaman:
-        right_label += " (black) + Ardaman 2009 (blue / green)"
+        # Green = conductivity; only mention it if it's still drawn.
+        ard_colors = "blue" if cfg.drop_conductivity else "blue / green"
+        right_label += f" (black) + Ardaman 2009 ({ard_colors})"
     ax_note.set_xlabel(right_label, fontsize=10)
 
     # ── 7) Title  (FIX: full title restored — see migration notes) ──
@@ -516,6 +716,10 @@ def plot_caliper_video_panel(
             f"{ard_note}"
         )
     title_y = 1.0 - 0.4 / figsize[1]
+    if half == "top":
+        title += "  (upper half)"
+    elif half == "bottom":
+        title += "  (lower half)"
     fig.suptitle(title, fontsize=11.5, fontweight="bold", y=title_y)
     top_margin = max(0.92, 1.0 - 1.0 / figsize[1])
     fig.subplots_adjust(left=0.075, right=0.985, top=top_margin, bottom=0.05)
@@ -580,8 +784,16 @@ def build_all_caliper_video_panels(
                 output_path=fig_path,
             )
             plt.close(fig)
-            print(f"  ✓ {fig_path}")
-            written.append(fig_path)
+            # When config.split_depth is set, two files were written
+            # (``_top`` / ``_bottom``); otherwise the single base name.
+            if config is not None and getattr(config, "split_depth", False):
+                top_p, bot_p = _split_output_paths(fig_path)
+                print(f"  ✓ {top_p}")
+                print(f"  ✓ {bot_p}")
+                written.extend([top_p, bot_p])
+            else:
+                print(f"  ✓ {fig_path}")
+                written.append(fig_path)
         except Exception as exc:
             print(f"  ✗ FAILED: {exc!r}")
             import traceback

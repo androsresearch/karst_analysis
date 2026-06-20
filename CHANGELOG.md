@@ -4,6 +4,50 @@ All notable changes to `karst_analysis` are documented here. Older
 versions (v1–v17.1) shipped as zip patches with PowerShell installers;
 their internal notes live under `backups/`.
 
+
+
+## v17.6.1 — 2026-06-20 feat/improve_viz_figures
+
+### Added
+- `convergence.caliper_video.PanelConfig`: three opt-in options for the
+  caliper × video × Ardaman panel, all defaults legacy-preserving:
+  - `drop_conductivity` (default `False`): when `True`, filters out
+    Ardaman in-situ-conductivity entries (green) from the right panel.
+    The xlabel adapts to the colors actually drawn.
+  - `split_depth` (default `False`): when `True`, renders the well as
+    two figures split at the geometric midpoint (total depth / 2).
+    Output filenames get `_top` and `_bottom` suffixes.
+  - `group_boundary_bgl_m` (default `None`): when set, draws a
+    horizontal reference line at that BGL depth and adds large
+    "Group I" / "Group II" text boxes on the right panel, auto-placed
+    in the widest free vertical band on the correct side of the
+    boundary (anchored to the right edge). Design parameter
+    hand-set from the Ardaman 2009 report; cross-references thesis
+    table `\label{tab:ardaman_groups}`.
+
+### Changed
+- `convergence.caliper_video.build_all_caliper_video_panels`: propagates
+  `config` to `plot_caliper_video_panel` and, when `split_depth` is on,
+  reports both `_top` and `_bottom` filenames in the written list.
+
+### Verified
+- Default config (no options set) reproduces the previous panel
+  pixel-identically (max pixel diff = 0 vs original on synthetic
+  inputs).
+- For AW6D with `drop_conductivity=True`, `split_depth=True`,
+  `group_boundary_bgl_m=5.2`: two PNGs that fit on one page each, no
+  green annotations, boundary line drawn only in the upper half, group
+  boxes placed without overlapping notes.
+- Edge cases: `split_depth` without boundary → no line, no boxes;
+  boundary outside depth range → no line, single group label.
+
+### Known limitations
+- `scripts/caliper_video_panels.py` still runs in legacy mode; no CLI
+  flag exposes the new options yet. To produce the AW6D split, call
+  `plot_caliper_video_panel` directly with a custom `PanelConfig`
+  (smoke-test snippet in the commit body). CLI flag deferred to a
+  follow-up.
+
 ## v17.6 — 2026-06-10
 
 ### feat: optional `top_mz_sec_threshold` on `compute_slopes`

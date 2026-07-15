@@ -1,9 +1,18 @@
 # Changelog
 
-All notable changes to `karst_analysis` are documented here. Older
-versions (v1–v17.1) shipped as zip patches with PowerShell installers;
-their internal notes live under `backups/`.
+All notable changes to `karst_analysis` are documented here. 
 
+## v17.7.0 — 2026-07-14
+
+### Changed
+- Unified repository: merged the full `freshwater_lens` history (2025-01 → 2026-04, manual notebook development) into `karst_analysis`. Final tree unchanged (identical to v17.6.1).
+- Notebook outputs stripped from the pre-merge history for publication (git filter-repo); code, chronology, and authorship preserved. One derived HTML artifact removed from history.
+
+### Added
+- `.mailmap` unifying contributor identities; provenance and contributors section in README (see also thesis Annex B).
+
+### Notes
+- Repository renamed from `freshwater_lens` to `karst_analysis`.
 
 
 ## v17.6.1 — 2026-06-20 feat/improve_viz_figures

@@ -1,4 +1,4 @@
-uv# karst_analysis
+# karst_analysis
 
 Multi-method analysis of a coastal karst aquifer system at Andros, Bahamas.
 
@@ -287,3 +287,18 @@ mixing-zone–coloured breakpoints) are non-breaking for existing tests
 ## License
 
 Proprietary. © 2025 University of Bristol. See `LICENSE`.
+
+## Provenance, development history, and contributors
+
+This repository unifies the two development stages of the Chapter 3 codebase of the doctoral thesis:
+
+- **2025-01 – 2026-04 (`freshwater_lens` era):** manual exploratory development in Jupyter notebooks. Notebook outputs were stripped from the git history for publication; all code, commit chronology, and authorship are preserved intact at every point of the history. Computational work predating this repository (2020–2024, when the lead author learned Python and developed early analyses) is not under version control here.
+- **2026-05 onward (`karst_analysis` era):** restructuring of the notebook-based workflows into this modular, tested, installable Python package, with Claude (Anthropic) as programming assistant under the lead author's direction, as declared in the thesis Statement on the Use of AI (Annex B). Methodological decisions, parameter choices, and scientific interpretations are the authors'.
+
+### Contributors
+
+- **Gómez-Nicolás, M.** — lead author: research design, field data, analysis, and code development across both eras.
+- **Armando Huitzilt Rodríguez** — co-developer throughout the notebook era (2025-01 – 2026-04): implemented much of the profile processing and evaluation code in close discussion with the lead author, including the log-transform pipeline and halocline artifact fixes. His contributions were essential to the project's progress.
+- **Carolina Villarraga Morales** — data pre-processing: reorganized and standardized raw CSV files from unstructured Excel workbooks, recovered and re-identified mislabeled profiles, and converted field notes into tabular datasets. She also produced early side-by-side viz of caliper and YSI profiles (branch `feat/36-comparacion-caliper-pozos`, preserved in the project archives), superseded by the current implementation. 
+
+Exploratory branches from the notebook era are preserved outside this repository as git bundles; the pre-rewrite history is likewise archived offline.
